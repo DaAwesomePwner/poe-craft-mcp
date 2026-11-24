@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+build/
+dist/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Local runtime data (cache.db, gamedata/, logs/)
+data/
+
+# Local config and secrets
+config.toml
+.env
+
+# Tooling
+.orchestrator/
+.idea/
+.vscode/
