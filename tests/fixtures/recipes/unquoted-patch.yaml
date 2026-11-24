@@ -1,0 +1,42 @@
+id: unquoted-patch
+name: Alteration spam ring
+tags:
+- alteration
+- bench
+status: verified
+verified_patch: 3.3
+sources:
+- https://example.com/guide
+requires: []
+budget_div: 1
+base:
+  lookup:
+    source: ninja
+    type: BaseType
+    name: Ruby Ring
+    ilvl_min: 80
+steps:
+- action: alteration_spam
+  materials:
+  - source: ninja
+    category: Currency
+    name: Orb of Alteration
+    qty: 1
+  - source: fixed
+    chaos: 0.5
+    label: Augmentation
+  repeat_until: target prefix
+  p_success:
+    p_source: user
+    value: 0.05
+outcomes:
+- name: hit
+  probability: 0.7
+  trade_url: https://www.pathofexile.com/trade/search/Test/abc
+- name: miss
+  probability: 0.3
+  fixed_chaos: 0
+salvage:
+  fixed_chaos: 0
+minutes: 5
+notes: Fixture recipe.

@@ -1,0 +1,24 @@
+# Placeholder example: structure is complete, numbers and URLs are NOT checked for 3.30.
+id: example-stygian-vise-base-flip
+name: Influenced Stygian Vise base flip (example)
+tags: [base-flip, bulk, example]
+status: unverified
+verified_patch: null
+sources: []
+requires: []
+budget_div: 20
+base:
+  lookup: { source: ninja, type: BaseType, name: "Stygian Vise", ilvl_min: 84, influence: "Hunter" }
+steps:
+  - action: buy_and_relist
+    materials:
+      - { source: fixed, chaos: 2, label: "Listing overhead and price checks" }
+outcomes:
+  - { name: "sells at premium", probability: 0.8, trade_url: "https://www.pathofexile.com/trade/search/<league>/<premium-search-id>" }
+  - { name: "stuck, sold back at base price", probability: 0.2, use_salvage: true }
+salvage:
+  lookup: { source: ninja, type: BaseType, name: "Stygian Vise", ilvl_min: 84, influence: "Hunter" }
+minutes: 3
+notes: >-
+  Buy influenced bases below the going rate and relist them at the premium search price.
+  Replace the placeholder probabilities and trade URLs with your own.
