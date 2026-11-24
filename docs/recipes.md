@@ -73,6 +73,8 @@ salvage:
 
 Each outcome has exactly one of `trade_url` (priced from live listings), `fixed_chaos` or
 `use_salvage: true`. Failure is an ordinary outcome: include it so the probabilities sum to 1.
+`fixed_chaos` and `use_salvage` are failure values only: a successful sale must use `trade_url`,
+and a recipe with no `trade_url` sale (or whose sale price you override) is evaluated but not ranked.
 Value uses the 25th percentile of the listings minus the configured undercut.
 
 ## Trade URLs

@@ -220,7 +220,8 @@ and outcome type is in [docs/recipes.md](docs/recipes.md).
 
 **Failure is an outcome.** Outcome probabilities must sum to 1 (a failed attempt is just
 another outcome). Price a failure with `fixed_chaos: 0` for a total loss, `fixed_chaos: <n>`
-or `use_salvage: true` (uses the recipe's `salvage`).
+or `use_salvage: true` (uses the recipe's `salvage`). Those two are for failures only: a sale
+must be priced by a `trade_url`, or the recipe is evaluated but never ranked.
 
 **Making a trade URL.** On pathofexile.com/trade, build the search for the finished item
 (the same filters you would use to sell it), run it, and copy the address-bar URL:
