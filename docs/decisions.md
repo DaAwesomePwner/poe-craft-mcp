@@ -18,8 +18,9 @@ reversed, rewrite its line and note what it replaces.
 ## Recipes
 
 - The repo ships only 3 unverified structural example recipes; real crafts are added by the user after checking them in game. Why: 3.30 crafts can't be verified by agents. (2026-11-23, v1 build, PR #2)
-- `fixed_chaos` and `use_salvage` outcomes are failure values only; a successful sale must be priced by `trade_url`, and a recipe without one (or with its sale price overridden) is evaluated but never ranked. A step repeats only when it has `repeat_until`; `p_success` alone is ignored with a warning. Why: never rank on asserted sale prices without liquidity, and never double-count one-shot steps. (2026-11-24, v1 build, phase 3)
+- `fixed_chaos` and `use_salvage` outcomes are failure values only; a successful sale must be priced by `trade_url`, and a recipe without one (or with its sale price overridden) is evaluated but never ranked. Why: never rank a craft on an asserted sale price with no live listings behind it. (2026-11-24, v1 build, phase 3)
+- A recipe step repeats only when it has `repeat_until`; `p_success` without it is ignored with a warning and the step is paid once. Why: a one-shot step must not be costed as a repeated one. (2026-11-24, v1 build, phase 3)
 
 ## Profit engine
 
-- Success probabilities below 1e-12 are outside the supported range and raise a clear error. Why: float n90 maths can't tell adjacent attempt counts apart below that, and no real craft is that rare. (2026-11-24, v1 build, phase 3)
+- Success probabilities below 1e-12 are outside the supported range and raise a clear error. Why: the n90 calculation stays exact with a wide float margin down to 1e-12, while far smaller values eventually make adjacent attempt counts indistinguishable; no real craft is that rare. (2026-11-24, v1 build, phase 3)
