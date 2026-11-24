@@ -150,3 +150,37 @@ def test_divine_conversion_is_display_only() -> None:
     assert b.profit == pytest.approx(55)
     with pytest.raises(ValueError):
         to_divine(1, 0)
+
+
+def test_n90_corrects_near_integer_boundaries() -> None:
+    assert n90(0.89999999999) == 2  # (1 - p) is just above 0.1, so one attempt covers < 90%
+    assert n90(0.9) == 1
+    assert n90(0.1) == 22 and n90(0.5) == 4
+
+
+def test_salvage_applies_quantity() -> None:
+    half = evaluate(worked_craft(salvage=mat("Scrap", 0.5, 10)))
+    assert half.outcomes[2].value == pytest.approx(5)
+    assert half.v == pytest.approx(0.3 * 300 * 0.95 + 0.5 * 100 * 0.95 + 0.2 * 5)
+
+
+@pytest.mark.parametrize(
+    "override",
+    [
+        {"base": mat("Base", 1, -10)},
+        {"base": mat("Base", -1, 10)},
+        {"base": mat("Base", 1, float("nan"))},
+        {"base": mat("Base", 1, 10, volume=-5)},
+        {"salvage": mat("Salvage", 1, -1)},
+        {"steps": (Step("s", (mat("Essence", 1, -10),), p_success=0.5),)},
+        {"steps": (Step("s", (mat("Essence", float("inf"), 1),)),)},
+        {"outcomes": (Outcome("hit", 1.0, p25=-5, listing_count=10),)},
+        {"outcomes": (Outcome("hit", float("nan"), p25=5),)},
+        {"outcomes": (Outcome("hit", 1.0, p25=float("inf")),)},
+        {"outcomes": (Outcome("hit", 1.0, p25=5, listing_count=-1),)},
+        {"minutes": float("nan")},
+    ],
+)
+def test_negative_or_non_finite_inputs_raise(override: dict[str, object]) -> None:
+    with pytest.raises(ValueError):
+        evaluate(worked_craft(**override))

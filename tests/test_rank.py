@@ -111,3 +111,39 @@ def test_divine_budget_converts_only_for_the_comparison() -> None:
     cand = craft("x")
     result = rank([cand], 0.5, RATE)
     assert result.items[0].breakdown.c == pytest.approx(100)
+
+
+def test_sole_unpriced_zero_listing_outcome_is_never_ranked() -> None:
+    step = Step("spam", (Material("Mat", 1, 1),), p_success=0.5)
+    unsellable = evaluate(
+        Craft("dud", "dud", 5, (step,), (Outcome("hit", 1.0, p25=None, listing_count=0),))
+    )
+    result = rank([unsellable], 10, RATE, min_listings=10, risk="high")
+    assert result.items == ()
+    assert result.excluded[0].id == "dud" and "no price" in result.excluded[0].reason
+
+
+def test_unpriced_outcome_with_enough_listings_is_still_excluded() -> None:
+    step = Step("spam", (Material("Mat", 1, 1),), p_success=0.5)
+    out = (Outcome("hit", 0.5, p25=100, listing_count=50), Outcome("brick", 0.5, listing_count=50))
+    result = rank([evaluate(Craft("c", "c", 5, (step,), out))], 10, RATE, risk="high")
+    assert result.items == () and "'brick' has no price" in result.excluded[0].reason
+
+
+def test_budget_exactly_on_the_line_survives_float_noise() -> None:
+    cand = craft("exact", attempt_cost=2.9, p=0.1)  # C = 29c (within float noise), C90 = 63.8c
+    assert 0.29 * 100 < 29  # the divine conversion lands just below 29c
+    assert ids(rank([cand], 0.29, 100.0, risk="medium")) == ["exact"]
+    assert ids(rank([cand], 0.638, 100.0, risk="low")) == ["exact"]
+    assert ids(rank([cand], 0.28, 100.0, risk="medium")) == []
+
+
+def test_material_demand_is_aggregated_across_steps() -> None:
+    steps = (
+        Step("one", (Material("Orb", 6, 1, volume=100),)),
+        Step("two", (Material("Orb", 6, 1, volume=100),)),
+    )
+    out = (Outcome("hit", 1.0, p25=1000, listing_count=50),)
+    b = evaluate(Craft("agg", "agg", 5, steps, out))
+    flags = rank([b], 10, RATE, risk="high").items[0].flags
+    assert flags == ("low volume: Orb volume 100 < 10 x expected qty 12",)

@@ -47,28 +47,30 @@ def summarize(
 
     `rates` maps a trade currency id to its chaos value (chaos itself is 1.0). Listings whose
     currency has no usable rate (missing, non-finite or <= 0) are dropped and counted per
-    currency. Of the rest, those with a non-positive amount, or priced below 50% of the median
-    of the 10 cheapest, count as `dropped_outliers`. `currency_mix` counts the listings kept.
-    `cheapest_listing_age_seconds` needs `now`; without it the age is None. Never raises on
-    empty input.
+    currency. Of the rest, those with a non-finite or non-positive converted price, or priced
+    below 50% of the median of the 10 cheapest, count as `dropped_outliers`. `currency_mix`
+    counts the listings kept. `cheapest_listing_age_seconds` needs `now`; without it the age is
+    None. Never raises on empty input.
     """
     items = list(listings)
     unknown: dict[str, int] = {}
-    priced: list[tuple[float, Listing]] = []
+    valid: list[tuple[float, Listing]] = []
+    priced_count = 0
     for item in items:
         rate = rates.get(item.currency)
         if rate is None or not math.isfinite(rate) or rate <= 0:
             unknown[item.currency] = unknown.get(item.currency, 0) + 1
             continue
-        priced.append((item.amount * rate, item))
-    priced.sort(key=lambda pair: pair[0])
-
-    valid = [pair for pair in priced if math.isfinite(pair[0]) and pair[0] > 0]
+        priced_count += 1
+        price = item.amount * rate
+        if math.isfinite(price) and price > 0:
+            valid.append((price, item))
+    valid.sort(key=lambda pair: pair[0])
     kept = valid
     if valid:
         floor = OUTLIER_FRACTION * statistics.median(p for p, _ in valid[:CHEAPEST_WINDOW])
         kept = [pair for pair in valid if pair[0] >= floor]
-    dropped = len(priced) - len(kept)
+    dropped = priced_count - len(kept)
 
     mix: dict[str, int] = {}
     for _, item in kept:

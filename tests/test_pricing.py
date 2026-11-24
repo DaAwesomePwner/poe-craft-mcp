@@ -94,3 +94,10 @@ def test_cheapest_listing_age() -> None:
     assert summarize(listings, RATES).cheapest_listing_age_seconds is None
     naive = [Listing(10, "chaos", datetime(2026, 1, 1, 11, 59))]
     assert summarize(naive, RATES, NOW).cheapest_listing_age_seconds == 60
+
+
+def test_nan_amount_is_dropped_before_sorting() -> None:
+    s = summarize(chaos(100, float("nan"), 10, 20, float("inf")), RATES, NOW)
+    # cheapest-of-valid [10, 20, 100] -> median 20; floor 10 keeps all three
+    assert s.raw_count == 5 and s.dropped_outliers == 2 and s.listing_count == 3
+    assert s.median == 20.0

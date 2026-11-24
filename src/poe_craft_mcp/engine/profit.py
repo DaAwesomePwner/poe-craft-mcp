@@ -16,7 +16,7 @@ from poe_craft_mcp.engine.types import (
 DEFAULT_UNDERCUT = 0.05
 STALE_SECONDS = 30 * 60
 PROBABILITY_TOLERANCE = 1e-6
-_N90_EPSILON = 1e-9
+_N90_EPSILON = 1e-12
 
 
 def _check_p(p: float) -> None:
@@ -35,7 +35,13 @@ def n90(p: float) -> int:
     _check_p(p)
     if p == 1:
         return 1
-    return max(1, math.ceil(math.log(0.1) / math.log1p(-p) - _N90_EPSILON))
+    n = max(1, math.ceil(math.log(0.1) / math.log1p(-p)))
+    limit = 0.1 * (1 + _N90_EPSILON)
+    if n > 1 and (1 - p) ** (n - 1) <= limit:
+        n -= 1
+    elif (1 - p) ** n > limit:
+        n += 1
+    return n
 
 
 def to_divine(chaos: float | None, chaos_per_divine: float) -> float | None:
@@ -82,7 +88,7 @@ def _step_lines(step: Step) -> tuple[StepLine, tuple[MaterialLine, ...]]:
 
 def _outcome_line(o: Outcome, salvage: Material | None, undercut: float) -> OutcomeLine:
     if o.is_failure:
-        value = salvage.chaos if salvage and salvage.chaos is not None else 0.0
+        value = salvage.qty * salvage.chaos if salvage and salvage.chaos is not None else 0.0
     else:
         value = o.p25 * (1 - undercut) if o.p25 is not None else 0.0
     return OutcomeLine(
@@ -98,11 +104,30 @@ def _outcome_line(o: Outcome, salvage: Material | None, undercut: float) -> Outc
     )
 
 
+def _check_amount(label: str, value: float | None) -> None:
+    if value is not None and not (math.isfinite(value) and value >= 0):
+        raise ValueError(f"{label} must be finite and non-negative, got {value}")
+
+
+def _check_material(m: Material) -> None:
+    _check_amount(f"qty of '{m.name}'", m.qty)
+    _check_amount(f"price of '{m.name}'", m.chaos)
+    _check_amount(f"volume of '{m.name}'", m.volume)
+
+
 def _validate(craft: Craft, undercut: float) -> None:
     if not 0 <= undercut < 1:
         raise ValueError(f"undercut must be in [0, 1), got {undercut}")
-    if craft.minutes <= 0:
-        raise ValueError("minutes must be positive")
+    if not (math.isfinite(craft.minutes) and craft.minutes > 0):
+        raise ValueError("minutes must be positive and finite")
+    for m in (*([craft.base] if craft.base else []), *([craft.salvage] if craft.salvage else [])):
+        _check_material(m)
+    for step in craft.steps:
+        for m in step.materials:
+            _check_material(m)
+    for o in craft.outcomes:
+        _check_amount(f"p25 of '{o.name}'", o.p25)
+        _check_amount(f"listing_count of '{o.name}'", o.listing_count)
     if not craft.outcomes:
         raise ValueError("a craft needs at least one outcome")
     if any(not 0 <= o.probability <= 1 for o in craft.outcomes):
@@ -117,7 +142,8 @@ def evaluate(craft: Craft, undercut: float = DEFAULT_UNDERCUT) -> Breakdown:
 
     C = C_base + sum(c_attempt * E[attempts]), C90 uses n90 instead; single steps count once.
     V = sum(p_i * P25_i * (1 - u)) + p_fail * S. Profit = V - C; Profit/hr = Profit / (minutes/60);
-    ROI = Profit / C (None when C == 0).
+    ROI = Profit / C (None when C == 0). Salvage is `qty * chaos` per failure. Negative or
+    non-finite prices, quantities, volumes and probabilities raise ValueError.
 
     An unpriced base or material makes the craft `complete=False`: c, c90, profit, profit/hr and
     ROI are None, because a guessed cost would inflate profit. An unpriced sale outcome or

@@ -7,6 +7,7 @@ from poe_craft_mcp.engine.types import Breakdown
 
 RISKS = ("low", "medium", "high")
 LOW_VOLUME_FACTOR = 10
+BUDGET_TOLERANCE = 1e-9
 
 
 @dataclass(frozen=True)
@@ -35,10 +36,17 @@ class RankResult:
     note: str | None
 
 
+def _over(cost: float, budget: float) -> bool:
+    """True when cost exceeds budget beyond float noise from the divine conversion."""
+    return cost > budget * (1 + BUDGET_TOLERANCE)
+
+
 def _liquidity_drop(b: Breakdown, min_listings: int) -> str | None:
     for o in b.outcomes:
-        if o.is_failure or o.probability == 0 or o.p25 is None:
+        if o.is_failure or o.probability == 0:
             continue
+        if o.p25 is None:
+            return f"outcome '{o.name}' has no price"
         if o.listing_count is None:
             return f"outcome '{o.name}' has unknown listing count"
         if o.listing_count < min_listings:
@@ -47,15 +55,22 @@ def _liquidity_drop(b: Breakdown, min_listings: int) -> str | None:
 
 
 def _volume_flags(b: Breakdown) -> tuple[str, ...]:
-    """Flag materials whose poe.ninja volume is under 10x the expected quantity to buy."""
-    flags = []
+    """Flag materials whose volume is under 10x the expected quantity to buy.
+
+    Demand is summed per material name across the base and all steps. Unknown volume is not
+    flagged.
+    """
+    demand: dict[str, float] = {}
+    volume: dict[str, float] = {}
     for m in (*([b.base] if b.base else []), *b.materials):
-        if m.volume is not None and m.volume < LOW_VOLUME_FACTOR * m.expected_qty:
-            flags.append(
-                f"low volume: {m.name} volume {m.volume:g} < "
-                f"{LOW_VOLUME_FACTOR} x expected qty {m.expected_qty:g}"
-            )
-    return tuple(flags)
+        demand[m.name] = demand.get(m.name, 0.0) + m.expected_qty
+        if m.volume is not None:
+            volume.setdefault(m.name, m.volume)
+    return tuple(
+        f"low volume: {name} volume {volume[name]:g} < {LOW_VOLUME_FACTOR} x expected qty {qty:g}"
+        for name, qty in demand.items()
+        if name in volume and volume[name] < LOW_VOLUME_FACTOR * qty
+    )
 
 
 def _exclusion(
@@ -68,9 +83,9 @@ def _exclusion(
     drop = _liquidity_drop(b, min_listings)
     if drop:
         return f"illiquid: {drop}"
-    if risk == "low" and b.c90 > budget_chaos:
+    if risk == "low" and _over(b.c90, budget_chaos):
         return f"C90 {b.c90:g}c exceeds budget {budget_chaos:g}c (risk=low)"
-    if risk == "medium" and b.c > budget_chaos:
+    if risk == "medium" and _over(b.c, budget_chaos):
         return f"C {b.c:g}c exceeds budget {budget_chaos:g}c (risk=medium)"
     return None
 
@@ -87,9 +102,10 @@ def rank(
     """Filter and sort candidates by profit/hr desc, then profit desc, then id asc.
 
     Checks run in order and the first failure is the reported reason: unpriced inputs,
-    `max_minutes` (minutes per attempt), liquidity (any priced outcome with probability > 0 and
-    fewer than `min_listings` listings, or an unknown count, is dropped), then the budget by
-    risk (low: C90, medium: C, high: none). Low-volume materials are flagged, not dropped.
+    `max_minutes` (minutes per attempt), liquidity (any non-failure outcome with probability > 0
+    that has no price, an unknown listing count or fewer than `min_listings` listings is
+    dropped), then the budget by risk (low: C90, medium: C, high: none) with a 1e-9 relative
+    tolerance. Low-volume materials are flagged (demand summed per name), not dropped.
     """
     if risk not in RISKS:
         raise ValueError(f"risk must be one of {RISKS}, got {risk!r}")
