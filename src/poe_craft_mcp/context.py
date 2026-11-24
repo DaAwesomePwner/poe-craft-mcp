@@ -48,8 +48,13 @@ class AppContext:
         return cls(config=config, cache=cache, http=http)
 
     async def aclose(self) -> None:
-        for svc in self.services.values():
-            close = getattr(svc, "aclose", None)
-            if close is not None:
+        """Close every service, then the HTTP client; re-raise the first failure afterwards."""
+        closers = [getattr(svc, "aclose", None) for svc in self.services.values()]
+        errors: list[BaseException] = []
+        for close in [*(c for c in closers if c is not None), self.http.aclose]:
+            try:
                 await close()
-        await self.http.aclose()
+            except Exception as exc:
+                errors.append(exc)
+        if errors:
+            raise errors[0]
