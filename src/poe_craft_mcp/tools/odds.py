@@ -34,15 +34,32 @@ def register(server: MCPServer, ctx: AppContext) -> None:
         name="mod_odds",
         annotations=ToolAnnotations(read_only_hint=True, idempotent_hint=True),
     )
-    async def mod_odds(base: str, ilvl: int, target_mods: list[str], method: str) -> dict[str, Any]:
+    async def mod_odds(
+        base: str,
+        ilvl: int,
+        target_mods: list[str],
+        method: str,
+        enchant: str | None = None,
+        passives: int | None = None,
+        existing_mods: list[str] | None = None,
+    ) -> dict[str, Any]:
         """Chance per attempt of rolling at least one of `target_mods` (mods.json ids such as
         'IncreasedLife7') on `base` (base type name, e.g. 'Vaal Regalia') at item level `ilvl`.
-        `method`: 'chaos', 'alt', 'essence:<essence name>' or 'fossil:<fossil>[,<fossil>...]'.
-        Returns chance_per_attempt, expected_attempts, n90 (attempts for a 90% chance), the
-        weight table used, assumptions, export_version and warnings."""
+        `method`: 'chaos', 'alt', 'alt_aug' (Alteration, plus an Augmentation when it gave one
+        non-target affix), 'regal' (adds one mod to the magic item whose mods are
+        `existing_mods`), 'essence:<essence name>' or 'fossil:<fossil>[,<fossil>...]'.
+        Cluster jewels (Small/Medium/Large Cluster Jewel) need `enchant`: the 'Added Small
+        Passive Skills grant' enchant by name or id, e.g. 'Chaos Damage over Time' or
+        'Minion Life'; `passives` (added passive count) is optional.
+        Returns chance_per_attempt, expected_attempts, n90 (attempts for a 90% chance),
+        expected_materials (alteration/augmentation/regal per success), the resolved enchant,
+        the weight table used, assumptions, export_version and warnings."""
+        options = {"enchant": enchant, "passives": passives, "existing_mods": existing_mods}
         try:
             data = await asyncio.to_thread(get_gamedata, ctx)
-            result = await asyncio.to_thread(compute_odds, data, base, ilvl, target_mods, method)
+            result = await asyncio.to_thread(
+                compute_odds, data, base, ilvl, target_mods, method, **options
+            )
         except GameDataError as exc:
             raise ToolError(str(exc)) from exc
         return envelope(result, sources=[export_source(data)])

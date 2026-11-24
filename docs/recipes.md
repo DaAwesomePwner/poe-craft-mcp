@@ -56,9 +56,45 @@ risk filter). A step without `repeat_until` is paid once. `p_success` is one of:
 | --- | --- | --- |
 | `guide` | `value` (0 to 1, above 0), optional `source_url` | A number from a guide |
 | `user` | `value` | Your own record |
-| `weights` | `method`, `target_mods`, optional `base`, `ilvl` | Computed like the `mod_odds` tool from RePoE spawn weights (needs `scripts/fetch_gamedata.py`). `method`: `chaos`, `alt`, `essence:<essence>` or `fossil:<fossil>[,<fossil>...]`; `target_mods`: ids from the export, such as `IncreasedLife7` |
+| `weights` | `method`, `target_mods`, optional `base`, `ilvl`, `enchant`, `passives`, `existing_mods` | Computed like the `mod_odds` tool from RePoE spawn weights (needs `scripts/fetch_gamedata.py`). `method`: `chaos`, `alt`, `alt_aug`, `regal`, `essence:<essence>` or `fossil:<fossil>[,<fossil>...]`; `target_mods`: ids from the export, such as `IncreasedLife7` |
 
 Chances below 1e-12 are unsupported.
+
+#### Magic-item methods and cluster jewels
+
+- `alt`: one Orb of Alteration per attempt (1 or 2 affixes, half each).
+- `alt_aug`: one cycle is an Alteration plus, when it gave a single non-target affix and a
+  target can still roll on the open side, an Augmentation. The odds report
+  `expected_materials` per success, e.g. `{alteration: 5.2, augmentation: 0.9}`. Step
+  materials are per attempt (cycle), so list the Alteration with `qty: 1` and the Augmentation
+  with `qty` = augmentation / alteration (Augmentations used per cycle).
+- `regal`: the chance a Regal Orb on the magic item whose mods are `existing_mods` (mods.json
+  ids, at most one prefix and one suffix) adds a target. Mod groups of the existing mods are
+  blocked, the rare side limits apply (3 + 3 on items, 2 + 2 on jewels) and tags the existing
+  mods add (`adds_tags`) count.
+- Cluster jewels (`Small/Medium/Large Cluster Jewel`) need `enchant`: the "Added Small Passive
+  Skills grant" enchant by name, id or text, e.g. `Chaos Damage over Time`, `Minion Life`,
+  `Spell Damage`. Its tag (RePoE `cluster_jewels.json`) is what notables' spawn weights
+  reference, so it decides which notables can roll. `passives` (added passive count) is
+  optional and only checked against the jewel's range. Only `alt`, `alt_aug` and `regal` are
+  modelled for cluster jewels.
+
+A two-step cluster craft (notable A, then notable B):
+
+```yaml
+- action: alt_aug
+  repeat_until: "Wicked Pall"
+  p_success: { p_source: weights, method: alt_aug, target_mods: [AfflictionNotableWickedPall_],
+               enchant: "Chaos Damage over Time", ilvl: 84 }
+- action: regal
+  repeat_until: "Eternal Suffering"
+  p_success: { p_source: weights, method: regal, target_mods: [AfflictionNotableEternalSuffering],
+               enchant: "Chaos Damage over Time", ilvl: 84,
+               existing_mods: [AfflictionNotableWickedPall_] }
+```
+
+A missed Regal leaves a rare without notable B: it must be scoured (or sold) and step 1 redone.
+`repeat_until` on the Regal step prices only the Regals, so account for the redo separately.
 
 ### `outcomes` and `salvage`
 

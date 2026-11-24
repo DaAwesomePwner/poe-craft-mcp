@@ -15,6 +15,7 @@ from poe_craft_mcp.gamedata.fetch import FetchError, fetch_export
 from poe_craft_mcp.gamedata.loader import EXPORT_FILES, get_gamedata, load_gamedata
 from poe_craft_mcp.gamedata.lookup import resolve_base, resolve_essence, resolve_fossils
 from poe_craft_mcp.gamedata.models import GameData, GameDataError, parse_patch
+from poe_craft_mcp.gamedata.odds import mod_odds
 from poe_craft_mcp.gamedata.pool import PoolEntry, entry_for, first_match
 from poe_craft_mcp.gamedata.publish import lock_path, previous_dir
 
@@ -144,6 +145,37 @@ def test_affix_limit_implicit_and_unmodelled_fossil_parsed(data: GameData) -> No
     assert sanctified.unmodelled and "lucky" in sanctified.unmodelled[0]
     (pristine,) = resolve_fossils(data, ["pristine"])
     assert pristine.unmodelled == ()
+
+
+def test_cluster_jewels_and_adds_tags_parsed(data: GameData) -> None:
+    medium = data.clusters["Metadata/Items/Jewels/JewelPassiveTreeExpansionMedium"]
+    assert (medium.name, medium.min_skills, medium.max_skills) == ("Medium Cluster Jewel", 4, 6)
+    dot = next(e for e in medium.enchants if e.name == "Chaos Damage over Time")
+    assert dot.tag == "affliction_chaos_damage_over_time_multiplier"
+    wicked = data.mods["AfflictionNotableWickedPall_"]
+    assert wicked.adds_tags == {"has_affliction_notable"}
+    assert ("affliction_chaos_damage_over_time_multiplier", 348) in wicked.spawn_weights
+    assert data.mods["Strength1"].adds_tags == frozenset()
+    # 3.30: attack- and cast-speed small-passive cluster mods are one mod family.
+    attack = data.mods["AfflictionJewelSmallPassivesGrantAttackSpeed"]
+    cast = data.mods["AfflictionJewelSmallPassivesGrantCastSpeed"]
+    assert attack.groups == cast.groups == {"AfflictionJewelAttackOrCastSpeed"}
+
+
+def test_cluster_file_outside_the_manifest_is_ignored(tmp_path: Path) -> None:
+    files = {
+        name: {"sha256": hashlib.sha256((FIXTURE_DIR / f"{name}.json").read_bytes()).hexdigest()}
+        for name in ("mods", "base_items", "essences", "fossils")
+    }
+    export = _copy_export(tmp_path / "gd", {"game_version": "3.30.0", "files": files})
+    without = load_gamedata(export)
+    assert without.clusters == {}
+    with pytest.raises(GameDataError, match="cluster_jewels.json is not in the export"):
+        mod_odds(without, "Medium Cluster Jewel", 84, ["AfflictionNotableWickedPall_"], "alt")
+    files["cluster_jewels"] = {"sha256": "0" * 64}
+    (export / "manifest.json").write_text(json.dumps({"files": files}), encoding="utf-8")
+    with pytest.raises(GameDataError, match="cluster_jewels.json does not match manifest"):
+        load_gamedata(export)
 
 
 def _export_transport(fail: str | None = None) -> httpx.MockTransport:

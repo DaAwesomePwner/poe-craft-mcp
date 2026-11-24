@@ -689,5 +689,838 @@
   ],
   "text": "(11-13)% increased Stun and Block Recovery",
   "type": "StunRecovery"
+ },
+ "AfflictionNotableWickedPall_": {
+  "adds_tags": [
+   "has_affliction_notable"
+  ],
+  "domain": "affliction_jewel",
+  "generation_type": "prefix",
+  "generation_weights": [
+   {
+    "tag": "expansion_jewel_large",
+    "weight": 100
+   },
+   {
+    "tag": "expansion_jewel_medium",
+    "weight": 100
+   },
+   {
+    "tag": "has_affliction_notable",
+    "weight": 0
+   },
+   {
+    "tag": "expansion_jewel_small",
+    "weight": 100
+   },
+   {
+    "tag": "default",
+    "weight": 0
+   }
+  ],
+  "grants_effects": [],
+  "groups": [
+   "AfflictionNotableWickedPall"
+  ],
+  "implicit_tags": [
+   "chaos_damage",
+   "damage",
+   "chaos"
+  ],
+  "is_essence_only": false,
+  "name": "Notable",
+  "required_level": 50,
+  "spawn_weights": [
+   {
+    "tag": "affliction_chaos_damage",
+    "weight": 259
+   },
+   {
+    "tag": "affliction_chaos_damage_over_time_multiplier",
+    "weight": 348
+   },
+   {
+    "tag": "default",
+    "weight": 0
+   }
+  ],
+  "stats": [
+   {
+    "id": "local_affliction_notable_wicked_pall",
+    "max": 1,
+    "min": 1
+   }
+  ],
+  "text": "1 Added Passive Skill is Wicked Pall",
+  "type": "AfflictionNotableWickedPall"
+ },
+ "AfflictionNotableEternalSuffering": {
+  "adds_tags": [
+   "has_affliction_notable"
+  ],
+  "domain": "affliction_jewel",
+  "generation_type": "prefix",
+  "generation_weights": [
+   {
+    "tag": "expansion_jewel_large",
+    "weight": 100
+   },
+   {
+    "tag": "expansion_jewel_medium",
+    "weight": 100
+   },
+   {
+    "tag": "has_affliction_notable",
+    "weight": 0
+   },
+   {
+    "tag": "expansion_jewel_small",
+    "weight": 100
+   },
+   {
+    "tag": "default",
+    "weight": 0
+   }
+  ],
+  "grants_effects": [],
+  "groups": [
+   "AfflictionNotableEternalSuffering"
+  ],
+  "implicit_tags": [
+   "chaos_damage",
+   "damage",
+   "chaos"
+  ],
+  "is_essence_only": false,
+  "name": "Notable",
+  "required_level": 50,
+  "spawn_weights": [
+   {
+    "tag": "affliction_chaos_damage_over_time_multiplier",
+    "weight": 348
+   },
+   {
+    "tag": "default",
+    "weight": 0
+   }
+  ],
+  "stats": [
+   {
+    "id": "local_affliction_notable_eternal_suffering",
+    "max": 1,
+    "min": 1
+   }
+  ],
+  "text": "1 Added Passive Skill is Eternal Suffering",
+  "type": "AfflictionNotableEternalSuffering"
+ },
+ "AfflictionNotableLowTolerance": {
+  "adds_tags": [
+   "has_affliction_notable"
+  ],
+  "domain": "affliction_jewel",
+  "generation_type": "prefix",
+  "generation_weights": [
+   {
+    "tag": "expansion_jewel_large",
+    "weight": 100
+   },
+   {
+    "tag": "expansion_jewel_medium",
+    "weight": 100
+   },
+   {
+    "tag": "has_affliction_notable",
+    "weight": 0
+   },
+   {
+    "tag": "expansion_jewel_small",
+    "weight": 100
+   },
+   {
+    "tag": "default",
+    "weight": 0
+   }
+  ],
+  "grants_effects": [],
+  "groups": [
+   "AfflictionNotableLowTolerance"
+  ],
+  "implicit_tags": [
+   "chaos_damage",
+   "poison",
+   "damage",
+   "chaos",
+   "ailment"
+  ],
+  "is_essence_only": false,
+  "name": "Notable",
+  "required_level": 68,
+  "spawn_weights": [
+   {
+    "tag": "affliction_chaos_damage_over_time_multiplier",
+    "weight": 130
+   },
+   {
+    "tag": "default",
+    "weight": 0
+   }
+  ],
+  "stats": [
+   {
+    "id": "local_affliction_notable_low_tolerance",
+    "max": 1,
+    "min": 1
+   }
+  ],
+  "text": "1 Added Passive Skill is Low Tolerance",
+  "type": "AfflictionNotableLowTolerance"
+ },
+ "AfflictionNotablePressurePoints__": {
+  "adds_tags": [
+   "has_affliction_notable"
+  ],
+  "domain": "affliction_jewel",
+  "generation_type": "prefix",
+  "generation_weights": [
+   {
+    "tag": "expansion_jewel_large",
+    "weight": 100
+   },
+   {
+    "tag": "expansion_jewel_medium",
+    "weight": 100
+   },
+   {
+    "tag": "has_affliction_notable",
+    "weight": 0
+   },
+   {
+    "tag": "expansion_jewel_small",
+    "weight": 100
+   },
+   {
+    "tag": "default",
+    "weight": 0
+   }
+  ],
+  "grants_effects": [],
+  "groups": [
+   "AfflictionNotablePressurePoints"
+  ],
+  "implicit_tags": [
+   "damage",
+   "critical"
+  ],
+  "is_essence_only": false,
+  "name": "Notable",
+  "required_level": 50,
+  "spawn_weights": [
+   {
+    "tag": "affliction_critical_chance",
+    "weight": 457
+   },
+   {
+    "tag": "default",
+    "weight": 0
+   }
+  ],
+  "stats": [
+   {
+    "id": "local_affliction_notable_pressure_points",
+    "max": 1,
+    "min": 1
+   }
+  ],
+  "text": "1 Added Passive Skill is Pressure Points",
+  "type": "AfflictionNotablePressurePoints"
+ },
+ "AfflictionNotableOverwhelmingMalice": {
+  "adds_tags": [
+   "has_affliction_notable"
+  ],
+  "domain": "affliction_jewel",
+  "generation_type": "prefix",
+  "generation_weights": [
+   {
+    "tag": "expansion_jewel_large",
+    "weight": 100
+   },
+   {
+    "tag": "expansion_jewel_medium",
+    "weight": 100
+   },
+   {
+    "tag": "has_affliction_notable",
+    "weight": 0
+   },
+   {
+    "tag": "expansion_jewel_small",
+    "weight": 100
+   },
+   {
+    "tag": "default",
+    "weight": 0
+   }
+  ],
+  "grants_effects": [],
+  "groups": [
+   "AfflictionNotableOverwhelmingMalice"
+  ],
+  "implicit_tags": [],
+  "is_essence_only": false,
+  "name": "Notable",
+  "required_level": 68,
+  "spawn_weights": [
+   {
+    "tag": "affliction_critical_chance",
+    "weight": 171
+   },
+   {
+    "tag": "affliction_chaos_damage",
+    "weight": 97
+   },
+   {
+    "tag": "default",
+    "weight": 0
+   }
+  ],
+  "stats": [
+   {
+    "id": "local_affliction_notable_overwhelming_malice",
+    "max": 1,
+    "min": 1
+   }
+  ],
+  "text": "1 Added Passive Skill is Overwhelming Malice",
+  "type": "AfflictionNotableOverwhelmingMalice"
+ },
+ "AfflictionNotableFlowofLife_": {
+  "adds_tags": [
+   "has_affliction_notable"
+  ],
+  "domain": "affliction_jewel",
+  "generation_type": "prefix",
+  "generation_weights": [
+   {
+    "tag": "expansion_jewel_large",
+    "weight": 100
+   },
+   {
+    "tag": "expansion_jewel_medium",
+    "weight": 100
+   },
+   {
+    "tag": "has_affliction_notable",
+    "weight": 0
+   },
+   {
+    "tag": "expansion_jewel_small",
+    "weight": 100
+   },
+   {
+    "tag": "default",
+    "weight": 0
+   }
+  ],
+  "grants_effects": [],
+  "groups": [
+   "AfflictionNotableFlowofLife"
+  ],
+  "implicit_tags": [
+   "resource",
+   "life",
+   "damage"
+  ],
+  "is_essence_only": false,
+  "name": "Notable",
+  "required_level": 68,
+  "spawn_weights": [
+   {
+    "tag": "affliction_damage_over_time_multiplier",
+    "weight": 222
+   },
+   {
+    "tag": "affliction_cold_damage_over_time_multiplier",
+    "weight": 178
+   },
+   {
+    "tag": "affliction_physical_damage_over_time_multiplier",
+    "weight": 129
+   },
+   {
+    "tag": "affliction_fire_damage_over_time_multiplier",
+    "weight": 137
+   },
+   {
+    "tag": "affliction_chaos_damage_over_time_multiplier",
+    "weight": 130
+   },
+   {
+    "tag": "affliction_maximum_life",
+    "weight": 146
+   },
+   {
+    "tag": "default",
+    "weight": 0
+   }
+  ],
+  "stats": [
+   {
+    "id": "local_affliction_notable_flow_of_life",
+    "max": 1,
+    "min": 1
+   }
+  ],
+  "text": "1 Added Passive Skill is Flow of Life",
+  "type": "AfflictionNotableFlowofLife"
+ },
+ "AfflictionNotableBrushwithDeath": {
+  "adds_tags": [
+   "has_affliction_notable"
+  ],
+  "domain": "affliction_jewel",
+  "generation_type": "prefix",
+  "generation_weights": [
+   {
+    "tag": "expansion_jewel_large",
+    "weight": 100
+   },
+   {
+    "tag": "expansion_jewel_medium",
+    "weight": 100
+   },
+   {
+    "tag": "has_affliction_notable",
+    "weight": 0
+   },
+   {
+    "tag": "expansion_jewel_small",
+    "weight": 100
+   },
+   {
+    "tag": "default",
+    "weight": 0
+   }
+  ],
+  "grants_effects": [],
+  "groups": [
+   "AfflictionNotableBrushwithDeath"
+  ],
+  "implicit_tags": [
+   "resource",
+   "life",
+   "defences",
+   "energy_shield",
+   "damage"
+  ],
+  "is_essence_only": false,
+  "name": "Notable",
+  "required_level": 68,
+  "spawn_weights": [
+   {
+    "tag": "affliction_damage_over_time_multiplier",
+    "weight": 222
+   },
+   {
+    "tag": "affliction_cold_damage_over_time_multiplier",
+    "weight": 178
+   },
+   {
+    "tag": "affliction_physical_damage_over_time_multiplier",
+    "weight": 129
+   },
+   {
+    "tag": "affliction_fire_damage_over_time_multiplier",
+    "weight": 137
+   },
+   {
+    "tag": "affliction_chaos_damage_over_time_multiplier",
+    "weight": 130
+   },
+   {
+    "tag": "affliction_maximum_life",
+    "weight": 146
+   },
+   {
+    "tag": "affliction_maximum_energy_shield",
+    "weight": 189
+   },
+   {
+    "tag": "default",
+    "weight": 0
+   }
+  ],
+  "stats": [
+   {
+    "id": "local_affliction_notable_brush_with_death",
+    "max": 1,
+    "min": 1
+   }
+  ],
+  "text": "1 Added Passive Skill is Brush with Death",
+  "type": "AfflictionNotableBrushwithDeath"
+ },
+ "AfflictionJewelSmallPassivesHaveIncreasedEffect": {
+  "adds_tags": [],
+  "domain": "affliction_jewel",
+  "generation_type": "prefix",
+  "generation_weights": [],
+  "grants_effects": [],
+  "groups": [
+   "AfflictionJewelSmallPassivesHaveIncreasedEffect"
+  ],
+  "implicit_tags": [],
+  "is_essence_only": false,
+  "name": "Potent",
+  "required_level": 1,
+  "spawn_weights": [
+   {
+    "tag": "default",
+    "weight": 500
+   }
+  ],
+  "stats": [
+   {
+    "id": "local_affliction_jewel_small_nodes_have_effect_+%",
+    "max": 25,
+    "min": 25
+   }
+  ],
+  "text": "Added Small Passive Skills have 25% increased Effect",
+  "type": "AfflictionJewelSmallPassivesHaveIncreasedEffect"
+ },
+ "AfflictionJewelSmallPassivesGrantLife_": {
+  "adds_tags": [],
+  "domain": "affliction_jewel",
+  "generation_type": "prefix",
+  "generation_weights": [],
+  "grants_effects": [],
+  "groups": [
+   "AfflictionJewelSmallPassivesGrantLife"
+  ],
+  "implicit_tags": [
+   "resource",
+   "life"
+  ],
+  "is_essence_only": false,
+  "name": "Hale",
+  "required_level": 1,
+  "spawn_weights": [
+   {
+    "tag": "expansion_jewel_large",
+    "weight": 500
+   },
+   {
+    "tag": "expansion_jewel_medium",
+    "weight": 500
+   },
+   {
+    "tag": "default",
+    "weight": 0
+   }
+  ],
+  "stats": [
+   {
+    "id": "local_affliction_jewel_small_nodes_grant_maximum_life",
+    "max": 3,
+    "min": 2
+   }
+  ],
+  "text": "Added Small Passive Skills also grant: +(2-3) to Maximum Life",
+  "type": "AfflictionJewelSmallPassivesGrantLife"
+ },
+ "AfflictionJewelSmallPassivesGrantFireRes": {
+  "adds_tags": [],
+  "domain": "affliction_jewel",
+  "generation_type": "suffix",
+  "generation_weights": [],
+  "grants_effects": [],
+  "groups": [
+   "AfflictionJewelSmallPassivesGrantFireRes"
+  ],
+  "implicit_tags": [
+   "elemental",
+   "fire",
+   "resistance"
+  ],
+  "is_essence_only": false,
+  "name": "of the Whelpling",
+  "required_level": 1,
+  "spawn_weights": [
+   {
+    "tag": "expansion_jewel_large",
+    "weight": 500
+   },
+   {
+    "tag": "expansion_jewel_medium",
+    "weight": 500
+   },
+   {
+    "tag": "default",
+    "weight": 0
+   }
+  ],
+  "stats": [
+   {
+    "id": "local_affliction_jewel_small_nodes_grant_fire_resistance_%",
+    "max": 3,
+    "min": 2
+   }
+  ],
+  "text": "Added Small Passive Skills also grant: +(2-3)% to Fire Resistance",
+  "type": "AfflictionJewelSmallPassivesGrantFireRes"
+ },
+ "AfflictionJewelSmallPassivesGrantLifeRegen___": {
+  "adds_tags": [],
+  "domain": "affliction_jewel",
+  "generation_type": "suffix",
+  "generation_weights": [],
+  "grants_effects": [],
+  "groups": [
+   "AfflictionJewelSmallPassivesGrantLifeRegen"
+  ],
+  "implicit_tags": [
+   "resource",
+   "life"
+  ],
+  "is_essence_only": false,
+  "name": "of the Newt",
+  "required_level": 1,
+  "spawn_weights": [
+   {
+    "tag": "expansion_jewel_large",
+    "weight": 500
+   },
+   {
+    "tag": "expansion_jewel_medium",
+    "weight": 500
+   },
+   {
+    "tag": "default",
+    "weight": 0
+   }
+  ],
+  "stats": [
+   {
+    "id": "local_affliction_jewel_small_nodes_grant_%_life_regeneration_per_minute",
+    "max": 6,
+    "min": 6
+   }
+  ],
+  "text": "Added Small Passive Skills also grant: Regenerate 0.1% of Life per Second",
+  "type": "AfflictionJewelSmallPassivesGrantLifeRegen"
+ },
+ "AfflictionJewelSmallPassivesGrantCriticalStrikeMultiplier": {
+  "adds_tags": [],
+  "domain": "affliction_jewel",
+  "generation_type": "suffix",
+  "generation_weights": [],
+  "grants_effects": [],
+  "groups": [
+   "AfflictionJewelSmallPassivesGrantCriticalStrikeMultiplier"
+  ],
+  "implicit_tags": [
+   "damage",
+   "critical"
+  ],
+  "is_essence_only": false,
+  "name": "of Ire",
+  "required_level": 1,
+  "spawn_weights": [
+   {
+    "tag": "affliction_critical_chance",
+    "weight": 350
+   },
+   {
+    "tag": "default",
+    "weight": 0
+   }
+  ],
+  "stats": [
+   {
+    "id": "local_affliction_jewel_small_nodes_grant_base_critical_strike_multiplier_+",
+    "max": 1,
+    "min": 1
+   }
+  ],
+  "text": "Added Small Passive Skills also grant: +1% to Critical Strike Multiplier",
+  "type": "AfflictionJewelSmallPassivesGrantCriticalStrikeMultiplier"
+ },
+ "AfflictionJewelSmallPassivesGrantAttackSpeed": {
+  "adds_tags": [],
+  "domain": "affliction_jewel",
+  "generation_type": "suffix",
+  "generation_weights": [],
+  "grants_effects": [],
+  "groups": [
+   "AfflictionJewelAttackOrCastSpeed"
+  ],
+  "implicit_tags": [
+   "attack",
+   "speed"
+  ],
+  "is_essence_only": false,
+  "name": "of Skill",
+  "required_level": 1,
+  "spawn_weights": [
+   {
+    "tag": "affliction_axe_and_sword_damage",
+    "weight": 350
+   },
+   {
+    "tag": "affliction_mace_and_staff_damage",
+    "weight": 350
+   },
+   {
+    "tag": "affliction_dagger_and_claw_damage",
+    "weight": 350
+   },
+   {
+    "tag": "affliction_bow_damage",
+    "weight": 350
+   },
+   {
+    "tag": "affliction_wand_damage",
+    "weight": 350
+   },
+   {
+    "tag": "affliction_damage_with_two_handed_melee_weapons",
+    "weight": 350
+   },
+   {
+    "tag": "affliction_attack_damage_while_dual_wielding_",
+    "weight": 350
+   },
+   {
+    "tag": "affliction_attack_damage_while_holding_a_shield",
+    "weight": 350
+   },
+   {
+    "tag": "affliction_attack_damage_",
+    "weight": 350
+   },
+   {
+    "tag": "default",
+    "weight": 0
+   }
+  ],
+  "stats": [
+   {
+    "id": "local_affliction_jewel_small_nodes_grant_attack_speed_+%",
+    "max": 1,
+    "min": 1
+   }
+  ],
+  "text": "Added Small Passive Skills also grant: 1% increased Attack Speed",
+  "type": "AfflictionJewelSmallPassivesGrantAttackSpeed"
+ },
+ "AfflictionJewelSmallPassivesGrantCastSpeed": {
+  "adds_tags": [],
+  "domain": "affliction_jewel",
+  "generation_type": "suffix",
+  "generation_weights": [],
+  "grants_effects": [],
+  "groups": [
+   "AfflictionJewelAttackOrCastSpeed"
+  ],
+  "implicit_tags": [
+   "caster",
+   "speed"
+  ],
+  "is_essence_only": false,
+  "name": "of Talent",
+  "required_level": 1,
+  "spawn_weights": [
+   {
+    "tag": "affliction_spell_damage",
+    "weight": 350
+   },
+   {
+    "tag": "default",
+    "weight": 0
+   }
+  ],
+  "stats": [
+   {
+    "id": "local_affliction_jewel_small_nodes_grant_base_cast_speed_+%",
+    "max": 1,
+    "min": 1
+   }
+  ],
+  "text": "Added Small Passive Skills also grant: 1% increased Cast Speed",
+  "type": "AfflictionJewelSmallPassivesGrantCastSpeed"
+ },
+ "AfflictionJewelSmallPassivesGrantLifeSmall": {
+  "adds_tags": [],
+  "domain": "affliction_jewel",
+  "generation_type": "prefix",
+  "generation_weights": [],
+  "grants_effects": [],
+  "groups": [
+   "AfflictionJewelSmallPassivesGrantLife"
+  ],
+  "implicit_tags": [
+   "resource",
+   "life"
+  ],
+  "is_essence_only": false,
+  "name": "Hale",
+  "required_level": 1,
+  "spawn_weights": [
+   {
+    "tag": "expansion_jewel_small",
+    "weight": 500
+   },
+   {
+    "tag": "default",
+    "weight": 0
+   }
+  ],
+  "stats": [
+   {
+    "id": "local_affliction_jewel_small_nodes_grant_maximum_life",
+    "max": 3,
+    "min": 2
+   }
+  ],
+  "text": "Added Small Passive Skills also grant: +(2-3) to Maximum Life",
+  "type": "AfflictionJewelSmallPassivesGrantLife"
+ },
+ "AfflictionJewelSmallPassivesGrantLifeRegenSmall": {
+  "adds_tags": [],
+  "domain": "affliction_jewel",
+  "generation_type": "suffix",
+  "generation_weights": [],
+  "grants_effects": [],
+  "groups": [
+   "AfflictionJewelSmallPassivesGrantLifeRegen"
+  ],
+  "implicit_tags": [
+   "resource",
+   "life"
+  ],
+  "is_essence_only": false,
+  "name": "of the Newt",
+  "required_level": 1,
+  "spawn_weights": [
+   {
+    "tag": "expansion_jewel_small",
+    "weight": 500
+   },
+   {
+    "tag": "default",
+    "weight": 0
+   }
+  ],
+  "stats": [
+   {
+    "id": "local_affliction_jewel_small_nodes_grant_%_life_regeneration_per_minute",
+    "max": 6,
+    "min": 6
+   }
+  ],
+  "text": "Added Small Passive Skills also grant: Regenerate 0.1% of Life per Second",
+  "type": "AfflictionJewelSmallPassivesGrantLifeRegen"
  }
 }
