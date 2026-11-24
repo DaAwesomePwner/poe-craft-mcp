@@ -32,12 +32,13 @@ def register(server: MCPServer, ctx: AppContext) -> None:
         Prices come from poe.ninja (base, materials) and the trade site (p25 of the cheapest
         listings, for outcomes); step odds from the recipe or `mod_odds`. `price_overrides`
         maps an input name to a chaos price that replaces the fetched one (source
-        "override"): a material name/id or fixed label, an outcome name, the base name
-        ("base" for a trade-URL base), or "salvage". Returns C (expected cost), C90 (bad-run
-        cost), V (value), profit, profit_per_hour and ROI in chaos plus divine equivalents,
-        the engine breakdown,
-        `inputs` (each with source and age), `odds`, `complete` with `incomplete_reasons`,
-        and warnings. Relay the warnings, and quote ages older than 30 minutes.
+        "override"): a material name/id or fixed label, an outcome name (sale or failure),
+        the base name ("base" for a trade-URL base), or "salvage". Returns C (expected
+        cost), C90 (bad-run cost), V (value), profit, profit_per_hour and ROI in chaos plus
+        divine equivalents, the engine breakdown, `inputs` (each with source and age),
+        `odds`, `complete` with `incomplete_reasons`, `rankable` with its reasons (a craft
+        needs a trade-priced sale outcome), and warnings. Relay the warnings, and quote ages
+        older than 30 minutes.
         """
         store = get_recipe_store(ctx)
         recipe = store.get(id)

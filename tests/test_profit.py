@@ -206,3 +206,22 @@ def test_salvage_applies_quantity() -> None:
 def test_negative_or_non_finite_inputs_raise(override: dict[str, object]) -> None:
     with pytest.raises(ValueError):
         evaluate(worked_craft(**override))
+
+
+def test_failure_outcomes_can_carry_their_own_value() -> None:
+    craft = worked_craft(
+        outcomes=(
+            Outcome("hit", 0.5, p25=100, listing_count=40),
+            Outcome("bricked", 0.25, is_failure=True),
+            Outcome("lost", 0.25, is_failure=True, failure_value=0.0),
+        ),
+        salvage=mat("Salvage", 1, 4),
+    )
+    b = evaluate(craft)
+    assert [o.contribution for o in b.outcomes] == pytest.approx([47.5, 1.0, 0.0])
+    assert b.v == pytest.approx(48.5)
+    no_salvage = evaluate(worked_craft(outcomes=craft.outcomes, salvage=None))
+    assert no_salvage.v == pytest.approx(47.5)
+    assert no_salvage.warnings == ("no salvage price; failure outcome 'bricked' valued at 0",)
+    with pytest.raises(ValueError, match="failure_value"):
+        evaluate(worked_craft(outcomes=(Outcome("x", 1.0, is_failure=True, failure_value=-1),)))

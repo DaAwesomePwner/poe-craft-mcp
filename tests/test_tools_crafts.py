@@ -23,6 +23,7 @@ from test_trade_pricing import TRADE, mock_trade, trade
 from poe_craft_mcp.clients.trade import TradeClient
 from poe_craft_mcp.context import AppContext
 from poe_craft_mcp.recipes.loader import RecipeStore
+from poe_craft_mcp.services.evaluate import NO_SALE
 
 if TYPE_CHECKING:
     from conftest import FakeClock
@@ -107,7 +108,13 @@ async def test_rank_hides_unverified_by_default(
     assert data["hidden_unverified"] == 1 and data["excluded"] == []
     first = data["items"][0]
     assert first["profit_per_hour"] == pytest.approx(135) and first["c90"] == pytest.approx(2.5)
-    assert data["items"][2]["profit"] == pytest.approx(0.7514)
+    life = data["items"][2]
+    assert life["profit"] == pytest.approx(0.7514)
+    lines = life["breakdown"]
+    assert lines["steps"][0]["expected_attempts"] == 2 and lines["steps"][0]["n90"] == 4
+    assert [m["expected_qty"] for m in lines["materials"]] == [2, 2]
+    assert [o["contribution"] for o in lines["outcomes"]] == pytest.approx([4.275, 0.1])
+    assert life["inputs"] and life["warnings"] == [] and life["rankable"] is True
     assert "1 recipe hidden as unverified" in data["note"]
     with_unverified = await rank(ctx, budget_div=1, include_unverified=True)
     assert ids(with_unverified) == ["unverified-bow", *VERIFIED_ORDER]
@@ -205,3 +212,17 @@ async def test_rank_rejects_bad_arguments(ctx: AppContext, store: RecipeStore) -
         bad_limit = await client.call_tool("rank_crafts", {"budget_div": 1, "limit": 0})
     assert bad_risk.is_error and "risk must be one of" in str(bad_risk.content)
     assert bad_limit.is_error and "limit must be at least 1" in str(bad_limit.content)
+
+
+async def test_crafts_without_a_sale_outcome_are_never_ranked(
+    ctx: AppContext, api: NinjaApi, trade: TradeClient, store: RecipeStore, gamedata: None
+) -> None:
+    mock_trade(api)
+    old = store.recipes["deprecated-flip"]
+    store.recipes["fixed-only"] = old.model_copy(update={"id": "fixed-only", "status": "verified"})
+    data = await rank(ctx, budget_div=1, risk="high", min_listings=10)
+    async with session(ctx) as client:
+        evaluated = await call(client, "evaluate_recipe", id="fixed-only")
+    assert "fixed-only" not in ids(data)
+    assert {"id": "fixed-only", "reason": NO_SALE} in data["excluded"]
+    assert evaluated["rankable"] is False and evaluated["not_rankable_reasons"] == [NO_SALE]

@@ -12,17 +12,20 @@ import math
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+import httpx
 import pytest
-from test_ninja import NinjaApi, api, ctx
-from test_trade_pricing import mock_trade, trade
+from test_ninja import NinjaApi, api, ctx, load
+from test_trade import SAVED_URL, recorded
+from test_trade_pricing import TRADE, fetch_body, mock_trade, trade
 
 from poe_craft_mcp.clients.trade import TradeClient
 from poe_craft_mcp.context import AppContext
+from poe_craft_mcp.engine.rank import rank
 from poe_craft_mcp.gamedata.loader import load_gamedata
 from poe_craft_mcp.recipes.loader import RecipeStore
 from poe_craft_mcp.services import recipe_odds
-from poe_craft_mcp.services.evaluate import Evaluation, evaluate_recipe
-from poe_craft_mcp.services.recipe_inputs import Pricer, check_overrides
+from poe_craft_mcp.services.evaluate import NO_SALE, Evaluation, evaluate_recipe
+from poe_craft_mcp.services.recipe_inputs import Pricer, TimeBudgetSpent, check_overrides
 
 if TYPE_CHECKING:
     from conftest import FakeClock
@@ -74,7 +77,7 @@ async def test_full_recipe_matches_hand_calculation(
     assert inputs["Astral Plate"].source["type"] == "BaseType"
     assert inputs["Astral Plate"].source["id"] == "astral-plate-85"
     assert inputs["Orb of Alteration"].source["id"] == "alt"
-    assert inputs["Orb of Alteration"].volume == 157730
+    assert inputs["Orb of Alteration"].volume == pytest.approx(157730 / 0.2118)
     assert inputs["Augmentation"].status == "fixed"
     hit = inputs["life plate"]
     assert (hit.chaos, hit.listing_count) == (5.0, 30)
@@ -116,6 +119,7 @@ async def test_weights_chance_comes_from_mod_odds(
     odds = ev.chances[0].report()
     assert odds["base"] == "Vaal Regalia" and odds["ilvl"] == 5
     assert odds["source"]["name"].startswith("RePoE export")
+    assert any("use the recipe's item level 5" in w for w in ev.warnings)
 
 
 async def test_unresolved_odds_block_the_craft(
@@ -202,7 +206,7 @@ async def test_target_that_cannot_roll_blocks_the_craft(
     assert ev.chances[0].report()["odds_warnings"][0].startswith("target cannot roll")
 
 
-async def test_different_failure_values_use_their_weighted_average(
+async def test_failure_outcomes_keep_their_own_values_and_overrides(
     ctx: AppContext, api: NinjaApi, trade: TradeClient, store: RecipeStore
 ) -> None:
     mock_trade(api)
@@ -215,6 +219,145 @@ async def test_different_failure_values_use_their_weighted_average(
         ctx, recipe.model_copy(update={"outcomes": outcomes}), Pricer(ctx), 0.05
     )
     assert ev.breakdown is not None
-    assert ev.breakdown.v == pytest.approx(0.8 * 4.75 + 0.1 * 1.0 + 0.1 * 0.0)
-    assert ev.breakdown.p_fail == pytest.approx(0.2)
-    assert any("probability-weighted average 0.5c" in w for w in ev.warnings)
+    assert [o.value for o in ev.breakdown.outcomes] == pytest.approx([4.75, 1.0, 0.0])
+    assert [o.contribution for o in ev.breakdown.outcomes] == pytest.approx([3.8, 0.1, 0.0])
+    assert ev.breakdown.v == pytest.approx(3.9) and ev.breakdown.p_fail == pytest.approx(0.2)
+
+    overridden = await run(ctx, store, "life-plate", {"bricked": 0.3})
+    assert overridden.breakdown is not None
+    assert overridden.breakdown.v == pytest.approx(0.9 * 4.75 + 0.1 * 0.3)
+    inputs = by_name(overridden)
+    assert inputs["bricked"].status == "override" and "salvage" not in inputs
+    assert not any("matches no input" in w for w in overridden.warnings)
+
+
+async def test_recipe_without_a_sale_outcome_is_not_rankable(
+    ctx: AppContext, api: NinjaApi, store: RecipeStore
+) -> None:
+    recipe = store.get("deprecated-flip")
+    assert recipe is not None
+    verified = recipe.model_copy(update={"status": "verified"})
+    ev = await evaluate_recipe(ctx, verified, Pricer(ctx), 0.05)
+    assert ev.breakdown is not None and ev.breakdown.p_fail == 1
+    assert ev.unrankable == [NO_SALE] and ev.rank_blockers() == [NO_SALE]
+    assert NO_SALE in ev.warnings
+
+
+async def test_p_success_without_repeat_until_is_costed_once(
+    ctx: AppContext, api: NinjaApi, trade: TradeClient, store: RecipeStore
+) -> None:
+    mock_trade(api)
+    recipe = store.get("bow-flip")
+    assert recipe is not None
+    chance = {"p_source": "user", "value": 0.5}
+    step = recipe.steps[0].model_validate({**recipe.steps[0].model_dump(), "p_success": chance})
+    ev = await evaluate_recipe(ctx, recipe.model_copy(update={"steps": [step]}), Pricer(ctx), 0.05)
+    assert ev.breakdown is not None
+    assert (ev.breakdown.c, ev.breakdown.c90) == pytest.approx((2.5, 2.5))
+    assert ev.breakdown.steps[0].p_success is None and ev.chances == []
+    assert "step '1. bench_craft': p_success ignored: step is not repeated" in ev.warnings
+
+
+async def test_weights_odds_use_the_selected_base_item_level(
+    ctx: AppContext,
+    api: NinjaApi,
+    trade: TradeClient,
+    store: RecipeStore,
+    gamedata: None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    mock_trade(api)
+    seen: list[tuple[str, int]] = []
+
+    def fake_odds(data: Any, base: str, ilvl: int, mods: Any, method: str) -> dict[str, Any]:
+        seen.append((base, ilvl))
+        return {
+            "chance_per_attempt": 0.5,
+            "method": method,
+            "target_mods": mods,
+            "export_version": "3.30",
+            "assumptions": [],
+            "warnings": [],
+        }
+
+    monkeypatch.setattr(recipe_odds, "mod_odds", fake_odds)
+    recipe = store.get("regalia-weights")
+    assert recipe is not None
+    lookup = {"source": "ninja", "type": "BaseType", "name": "Stygian Vise", "ilvl_min": 82}
+    chance = recipe.steps[0].p_success.model_copy(update={"base": None, "ilvl": None})  # type: ignore[union-attr]
+    vise = recipe.model_validate(
+        {
+            **recipe.to_document(),
+            "base": {"lookup": lookup},
+            "steps": [{**recipe.steps[0].model_dump(), "p_success": chance.model_dump()}],
+        }
+    )
+    ev = await evaluate_recipe(ctx, vise, Pricer(ctx), 0.05)
+    assert by_name(ev)["Stygian Vise"].chaos == 92.4  # cheapest ilvl >= 82 is the ilvl 83 row
+    assert seen == [("Stygian Vise", 83)]
+    assert not any("item level" in w for w in ev.warnings)
+
+
+async def test_exchange_volume_is_converted_to_units(
+    ctx: AppContext, api: NinjaApi, trade: TradeClient, store: RecipeStore
+) -> None:
+    mock_trade(api)
+    body = load("exchange_essence.json")
+    body["lines"] = [{"id": "test-essence", "primaryValue": 20, "volumePrimaryValue": 200}]
+    api.change("Essence", body)
+    recipe = store.get("bow-flip")
+    assert recipe is not None
+    essence = {"source": "ninja", "category": "Essence", "id": "test-essence", "qty": 5}
+    step = recipe.steps[0].model_validate({"action": "essence", "materials": [essence]})
+    ev = await evaluate_recipe(ctx, recipe.model_copy(update={"steps": [step]}), Pricer(ctx), 0.05)
+    assert by_name(ev)["test-essence"].volume == pytest.approx(10)  # 200c of volume at 20c
+    assert ev.breakdown is not None
+    ranked = rank([ev.breakdown], 1, 195)
+    assert ranked.items[0].flags == ("low volume: test-essence volume 10 < 10 x expected qty 5",)
+    alt = await run(ctx, store, "life-plate")
+    assert by_name(alt)["Orb of Alteration"].volume == pytest.approx(157730 / 0.2118)
+
+
+async def test_cached_quotes_are_served_after_the_time_budget(
+    ctx: AppContext, api: NinjaApi, trade: TradeClient, store: RecipeStore, clock: FakeClock
+) -> None:
+    search, fetch = mock_trade(api)
+    urls = {r.id: r.outcomes[0].trade_url for r in store.recipes.values()}
+    await Pricer(ctx).trade("outcome", "warm", urls["bow-flip"])
+    late = Pricer(ctx, deadline=clock(), clock=clock)
+    cached = await late.trade("outcome", "crafted bow", urls["bow-flip"])
+    assert (cached.chaos, cached.status) == (5.0, "ok")
+    with pytest.raises(TimeBudgetSpent):
+        await late.trade("outcome", "life plate", urls["life-plate"])
+    assert (search.call_count, fetch.call_count) == (1, 3)
+
+
+async def test_no_trade_request_starts_after_the_time_budget(
+    ctx: AppContext, api: NinjaApi, trade: TradeClient, store: RecipeStore, clock: FakeClock
+) -> None:
+    def slow_search(request: httpx.Request) -> httpx.Response:
+        clock.advance(10)
+        return recorded("search")
+
+    search = api.router.post(f"{TRADE}/api/trade/search/Covens").mock(side_effect=slow_search)
+    fetch = api.router.get(url__startswith=f"{TRADE}/api/trade/fetch/").mock(
+        return_value=recorded("fetch")
+    )
+    pricer = Pricer(ctx, deadline=clock() + 5, clock=clock)
+    with pytest.raises(TimeBudgetSpent):
+        await pricer.trade("outcome", "crafted bow", SAVED_URL)
+    assert (search.call_count, fetch.call_count) == (1, 0)
+
+
+async def test_trade_age_includes_the_currency_rate_age(
+    ctx: AppContext, api: NinjaApi, trade: TradeClient, store: RecipeStore, clock: FakeClock
+) -> None:
+    mock_trade(api, fetch=fetch_body([(0.05, "divine")] * 10))
+    await run(ctx, store, "bow-flip")
+    clock.advance(40 * 60)
+    api.endpoints["Currency"].status = 500  # rates now come from the 40-minute-old cache
+    ev = await run(ctx, store, "bow-flip")
+    bow = by_name(ev)["crafted bow"]
+    assert bow.chaos == pytest.approx(0.05 * 195) and bow.stale
+    assert bow.source["age_seconds"] == 0 and 2400 <= (bow.age_seconds or 0) < 2460
+    assert "quote age: crafted bow price is 40 min old" in ev.warnings

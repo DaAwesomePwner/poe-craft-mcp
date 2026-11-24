@@ -12,7 +12,7 @@ from poe_craft_mcp.engine.rank import RISKS, rank
 from poe_craft_mcp.engine.types import Source
 from poe_craft_mcp.http.fetch import FetchError
 from poe_craft_mcp.recipes.loader import RecipeStore
-from poe_craft_mcp.services.craft_report import collect_sources, summary
+from poe_craft_mcp.services.craft_report import collect_sources, full_report
 from poe_craft_mcp.services.evaluate import Evaluation, evaluate_recipe
 from poe_craft_mcp.services.recipe_inputs import Pricer, TimeBudgetSpent
 
@@ -44,24 +44,8 @@ def check_request(req: RankRequest) -> None:
         raise ValueError("max_minutes must be positive")
 
 
-def _blocked(ev: Evaluation) -> str | None:
-    """Why an evaluated recipe cannot be ranked before the engine's own checks."""
-    if ev.problems:
-        return "; ".join(ev.problems)
-    failed = ev.failed_inputs
-    if failed:
-        return "; ".join(f"{i.kind} '{i.name}': {i.error}" for i in failed)
-    return None
-
-
 def _item(ev: Evaluation, flags: tuple[str, ...], per_divine: float) -> dict[str, Any]:
-    return {
-        **summary(ev, per_divine),
-        "flags": list(flags),
-        "warnings": ev.warnings,
-        "inputs": [i.report() for i in ev.inputs],
-        "odds": [c.report() for c in ev.chances],
-    }
+    return {**full_report(ev, per_divine), "flags": list(flags)}
 
 
 def _note(store: RecipeStore, candidates: int, hidden: int, items: int, note: str | None) -> str:
@@ -107,9 +91,9 @@ async def rank_recipes(
             excluded.append({"id": recipe.id, "reason": reason})
             continue
         seen.append(ev)
-        reason = _blocked(ev)
-        if reason:
-            excluded.append({"id": recipe.id, "reason": reason})
+        blockers = ev.rank_blockers()
+        if blockers:
+            excluded.append({"id": recipe.id, "reason": "; ".join(blockers)})
         else:
             evaluated[recipe.id] = ev
     result = rank(

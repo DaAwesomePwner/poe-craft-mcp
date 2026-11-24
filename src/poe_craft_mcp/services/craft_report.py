@@ -31,6 +31,8 @@ def summary(ev: Evaluation, chaos_per_divine: float | None) -> dict[str, Any]:
         "evaluable": b is not None,
         "complete": bool(b and b.complete),
         "incomplete_reasons": ev.incomplete_reasons(),
+        "rankable": not ev.rank_blockers(),
+        "not_rankable_reasons": ev.rank_blockers(),
         "minutes": ev.recipe.minutes,
         **money,
         "roi": b.roi if b else None,
@@ -39,27 +41,32 @@ def summary(ev: Evaluation, chaos_per_divine: float | None) -> dict[str, Any]:
     }
 
 
-def full_report(ev: Evaluation, chaos_per_divine: float | None) -> dict[str, Any]:
-    """Summary plus the engine breakdown, every priced input and the step odds."""
+def breakdown_view(ev: Evaluation) -> dict[str, Any] | None:
+    """Engine lines: base, steps (attempts, n90, costs), materials (qty, expected qty and
+    cost), outcomes (value and contribution) and salvage."""
     b = ev.breakdown
-    out = summary(ev, chaos_per_divine)
-    out["chaos_per_divine"] = chaos_per_divine
-    out["undercut"] = b.undercut if b else None
-    out["breakdown"] = (
-        {
-            "base": dataclasses.asdict(b.base) if b.base else None,
-            "steps": [dataclasses.asdict(s) for s in b.steps],
-            "materials": [dataclasses.asdict(m) for m in b.materials],
-            "outcomes": [dataclasses.asdict(o) for o in b.outcomes],
-            "salvage": dataclasses.asdict(b.salvage) if b.salvage else None,
-        }
-        if b
-        else None
-    )
-    out["inputs"] = [i.report() for i in ev.inputs]
-    out["odds"] = [c.report() for c in ev.chances]
-    out["warnings"] = ev.warnings
-    return out
+    if b is None:
+        return None
+    return {
+        "undercut": b.undercut,
+        "base": dataclasses.asdict(b.base) if b.base else None,
+        "steps": [dataclasses.asdict(s) for s in b.steps],
+        "materials": [dataclasses.asdict(m) for m in b.materials],
+        "outcomes": [dataclasses.asdict(o) for o in b.outcomes],
+        "salvage": dataclasses.asdict(b.salvage) if b.salvage else None,
+    }
+
+
+def full_report(ev: Evaluation, chaos_per_divine: float | None) -> dict[str, Any]:
+    """Summary plus the engine breakdown, every priced input, the step odds and warnings."""
+    return {
+        **summary(ev, chaos_per_divine),
+        "chaos_per_divine": chaos_per_divine,
+        "breakdown": breakdown_view(ev),
+        "inputs": [i.report() for i in ev.inputs],
+        "odds": [c.report() for c in ev.chances],
+        "warnings": ev.warnings,
+    }
 
 
 def collect_sources(evaluations: list[Evaluation], *extra: Source) -> list[Source]:

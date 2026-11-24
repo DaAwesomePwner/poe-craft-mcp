@@ -2,13 +2,14 @@
 
 A failed lookup never raises: it becomes a `Priced` with `chaos=None` and an `error`, so one
 bad input is reported instead of crashing the evaluation. Only `TimeBudgetSpent` propagates.
+Volumes are in units: poe.ninja exchange volume (a chaos amount) is divided by the unit price.
+A trade price's age and staleness include the currency rates its listings were converted at.
 """
 
 from __future__ import annotations
 
 import math
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass, field
 from typing import Any
 
 from poe_craft_mcp.clients.ninja import get_ninja
@@ -18,51 +19,20 @@ from poe_craft_mcp.engine.types import Source
 from poe_craft_mcp.envelope import source
 from poe_craft_mcp.http.fetch import FetchError
 from poe_craft_mcp.recipes.models import Base, FixedMaterial, NinjaLookup, NinjaMaterial, Salvage
-from poe_craft_mcp.services.trade_pricing import OutcomePrice, PricingUnavailable, price_outcome
+from poe_craft_mcp.services.priced import Priced
+from poe_craft_mcp.services.trade_pricing import (
+    OutcomePrice,
+    PricingUnavailable,
+    QuoteNotCached,
+    price_outcome,
+)
 
 SALVAGE = "salvage"
+CURRENCY = "poe.ninja Currency"
 
 
 class TimeBudgetSpent(Exception):
     """A new trade lookup was needed after the caller's wall-time budget ran out."""
-
-
-@dataclass
-class Priced:
-    """One priced input. `chaos` is a unit price (None when unknown); `status` is one of
-    ok, fixed, override, not_found, error."""
-
-    kind: str
-    name: str
-    chaos: float | None
-    source: Source
-    status: str = "ok"
-    age_seconds: float | None = None
-    volume: float | None = None
-    listing_count: int | None = None
-    error: str | None = None
-    sources: list[Source] = field(default_factory=list)
-
-    @property
-    def failed(self) -> bool:
-        return self.status in ("not_found", "error")
-
-    def report(self) -> dict[str, Any]:
-        out: dict[str, Any] = {
-            "kind": self.kind,
-            "name": self.name,
-            "chaos": self.chaos,
-            "status": self.status,
-            "age_seconds": None if self.age_seconds is None else round(self.age_seconds, 1),
-            "source": self.source,
-        }
-        if self.volume is not None:
-            out["volume"] = self.volume
-        if self.listing_count is not None:
-            out["listing_count"] = self.listing_count
-        if self.error:
-            out["error"] = self.error
-        return out
 
 
 def check_overrides(overrides: Mapping[str, float] | None) -> dict[str, float]:
@@ -116,14 +86,14 @@ class Pricer:
     def unused_overrides(self) -> list[str]:
         return sorted(set(self.overrides) - self.used)
 
-    def _override(self, kind: str, name: str) -> Priced | None:
+    def override(self, kind: str, name: str) -> Priced | None:
         if name not in self.overrides:
             return None
         self.used.add(name)
         return Priced(kind, name, self.overrides[name], source("override"), "override")
 
     def fixed(self, kind: str, name: str, chaos: float) -> Priced:
-        return self._override(kind, name) or Priced(
+        return self.override(kind, name) or Priced(
             kind, name, chaos, source("recipe knowledge base", fixed=True), "fixed"
         )
 
@@ -131,7 +101,7 @@ class Pricer:
         if isinstance(m, FixedMaterial):
             return self.fixed("material", m.label, m.chaos)
         key = m.name or m.id or ""
-        return self._override("material", key) or await self._ninja(
+        return self.override("material", key) or await self._ninja(
             "material", key, lambda: self.ninja.price(m.category, key)
         )
 
@@ -139,7 +109,7 @@ class Pricer:
         if base.trade_url is not None:
             return await self.trade("base", "base", base.trade_url)
         lookup: NinjaLookup = base.lookup  # type: ignore[assignment]
-        return self._override("base", lookup.name) or await self._ninja(
+        return self.override("base", lookup.name) or await self._ninja(
             "base",
             lookup.name,
             lambda: self.ninja.find_base(lookup.name, lookup.ilvl_min, lookup.influence),
@@ -151,7 +121,7 @@ class Pricer:
         if salvage.trade_url is not None:
             return await self.trade("salvage", SALVAGE, salvage.trade_url)
         lookup: NinjaLookup = salvage.lookup  # type: ignore[assignment]
-        return self._override("salvage", SALVAGE) or await self._ninja(
+        return self.override("salvage", SALVAGE) or await self._ninja(
             "salvage",
             SALVAGE,
             lambda: self.ninja.find_base(lookup.name, lookup.ilvl_min, lookup.influence),
@@ -166,48 +136,69 @@ class Pricer:
             error = "no matching poe.ninja row"
             return Priced(kind, name, None, source("poe.ninja"), "not_found", error=error)
         item_source, dataset = _ninja_source(row)
+        chaos, volume = row["chaos"], row.get("volume_or_listings")
+        if volume is not None and row.get("volume_kind") == "chaos_volume":
+            volume = volume / chaos if chaos else None
         return Priced(
             kind,
             name,
-            row["chaos"],
+            chaos,
             item_source,
-            "ok" if row["chaos"] is not None else "not_found",
+            "ok" if chaos is not None else "not_found",
             age_seconds=item_source["age_seconds"],
-            volume=row.get("volume_or_listings"),
-            error=None if row["chaos"] is not None else "poe.ninja row has no price",
+            volume=volume,
+            error=None if chaos is not None else "poe.ninja row has no price",
             sources=[dataset],
+            stale=dataset["stale"],
+            ilvl=row.get("ilvl"),
         )
+
+    def _spent(self) -> bool:
+        return self.deadline is not None and self.clock() >= self.deadline
+
+    async def _lookup(self, name: str, url: str) -> OutcomePrice | str:
+        """Trade price for `url`; past the deadline only cached listings are served."""
+        try:
+            return await price_outcome(
+                self.ctx, trade_url=url, deadline=self.deadline, cache_only=self._spent()
+            )
+        except QuoteNotCached:
+            raise TimeBudgetSpent(name) from None
+        except PricingUnavailable as exc:
+            if self._spent():  # cut short by our own deadline, not by the trade site
+                raise TimeBudgetSpent(name) from None
+            return f"price unavailable: {exc.reason}"
+        except ValueError as exc:
+            return f"bad trade URL: {exc}"
 
     async def trade(self, kind: str, name: str, url: str) -> Priced:
         """Price via trade listings (p25 of the cheapest sample)."""
-        hit = self._override(kind, name)
+        hit = self.override(kind, name)
         if hit:
             return hit
         if "<" in url:
             error = "placeholder trade URL; fill in a real saved search"
             return Priced(kind, name, None, source("trade", url=url), "error", error=error)
         if url not in self._trade:
-            if self.deadline is not None and self.clock() >= self.deadline:
-                raise TimeBudgetSpent(name)
-            try:
-                self._trade[url] = await price_outcome(self.ctx, trade_url=url)
-            except PricingUnavailable as exc:
-                self._trade[url] = f"price unavailable: {exc.reason}"
-            except ValueError as exc:
-                self._trade[url] = f"bad trade URL: {exc}"
+            self._trade[url] = await self._lookup(name, url)
         found = self._trade[url]
         if isinstance(found, str):
             return Priced(kind, name, None, source("trade", url=url), "error", error=found)
         trade_source = found.sources[-1]
+        age = found.age_seconds
+        if set(found.currency_mix) - {"chaos"}:  # converted with poe.ninja Currency rates
+            rates = [s["age_seconds"] for s in found.sources[:-1] if s["name"] == CURRENCY]
+            age = max([age, *(a for a in rates if a is not None)])
         return Priced(
             kind,
             name,
             found.p25,
             trade_source,
             "ok" if found.p25 is not None else "not_found",
-            age_seconds=found.age_seconds,
+            age_seconds=age,
             volume=found.listing_count,
             listing_count=found.listing_count,
             error=None if found.p25 is not None else "no usable listings",
             sources=list(found.sources),
+            stale=found.stale,
         )

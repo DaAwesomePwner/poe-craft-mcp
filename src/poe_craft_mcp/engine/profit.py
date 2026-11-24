@@ -94,7 +94,9 @@ def _step_lines(step: Step) -> tuple[StepLine, tuple[MaterialLine, ...]]:
 
 
 def _outcome_line(o: Outcome, salvage: Material | None, undercut: float) -> OutcomeLine:
-    if o.is_failure:
+    if o.is_failure and o.failure_value is not None:
+        value = o.failure_value
+    elif o.is_failure:
         value = salvage.qty * salvage.chaos if salvage and salvage.chaos is not None else 0.0
     else:
         value = o.p25 * (1 - undercut) if o.p25 is not None else 0.0
@@ -135,6 +137,7 @@ def _validate(craft: Craft, undercut: float) -> None:
     for o in craft.outcomes:
         _check_amount(f"p25 of '{o.name}'", o.p25)
         _check_amount(f"listing_count of '{o.name}'", o.listing_count)
+        _check_amount(f"failure_value of '{o.name}'", o.failure_value)
     if not craft.outcomes:
         raise ValueError("a craft needs at least one outcome")
     if any(not 0 <= o.probability <= 1 for o in craft.outcomes):
@@ -148,7 +151,8 @@ def evaluate(craft: Craft, undercut: float = DEFAULT_UNDERCUT) -> Breakdown:
     """Evaluate a craft.
 
     C = C_base + sum(c_attempt * E[attempts]), C90 uses n90 instead; single steps count once.
-    V = sum(p_i * P25_i * (1 - u)) + p_fail * S. Profit = V - C; Profit/hr = Profit / (minutes/60);
+    V = sum(p_i * P25_i * (1 - u)) + sum over failures of p_f * (failure_value_f or S).
+    Profit = V - C; Profit/hr = Profit / (minutes/60);
     ROI = Profit / C (None when C == 0). Salvage is `qty * chaos` per failure. Negative or
     non-finite prices, quantities, volumes and probabilities raise ValueError.
 
@@ -171,10 +175,11 @@ def evaluate(craft: Craft, undercut: float = DEFAULT_UNDERCUT) -> Breakdown:
     if missing:
         warnings.append(f"no price for input(s): {', '.join(missing)}; cost unknown")
     outcomes = tuple(_outcome_line(o, craft.salvage, undercut) for o in craft.outcomes)
-    for o in outcomes:
+    no_salvage = craft.salvage is None or craft.salvage.chaos is None
+    for o, given in zip(outcomes, craft.outcomes, strict=True):
         if o.probability == 0:
             continue
-        if o.is_failure and (craft.salvage is None or craft.salvage.chaos is None):
+        if o.is_failure and given.failure_value is None and no_salvage:
             warnings.append(f"no salvage price; failure outcome '{o.name}' valued at 0")
         elif not o.is_failure and o.p25 is None:
             warnings.append(f"outcome '{o.name}' has no price; valued at 0")
