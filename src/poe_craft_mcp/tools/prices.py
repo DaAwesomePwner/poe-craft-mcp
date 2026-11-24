@@ -45,6 +45,7 @@ def register(server: MCPServer, ctx: AppContext) -> None:
         else:
             rows = sorted(ds.rows, key=lambda r: r["chaos"] or 0, reverse=True)
         total = len(rows)
+        await ninja.record(ds, rows[:MAX_ROWS])
         payload: dict[str, Any] = {
             "category": ds.type,
             "league": ds.league,
@@ -55,7 +56,7 @@ def register(server: MCPServer, ctx: AppContext) -> None:
         }
         if not ds.rows:
             payload["hint"] = f"poe.ninja returned no rows for {ds.type} (empty or retired type)."
-        return envelope(payload, [ds.source()])
+        return envelope(payload, ds.sources())
 
     @server.tool(name="get_base_price", annotations=read_only)
     async def get_base_price(
@@ -72,7 +73,9 @@ def register(server: MCPServer, ctx: AppContext) -> None:
         except (NinjaError, FetchError) as exc:
             raise ToolError(str(exc)) from exc
         row = match_base(ds.rows, base, ilvl_min, influence)
+        if row is not None:
+            await ninja.record(ds, [row])
         payload: dict[str, Any] = {"league": ds.league, "row": row}
         if row is None:
             payload["hint"] = BASE_HINT
-        return envelope(payload, [ds.source()])
+        return envelope(payload, ds.sources())

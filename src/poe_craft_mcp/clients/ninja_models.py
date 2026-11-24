@@ -77,6 +77,13 @@ class Dataset:
     age_seconds: float | None = None
     stale: bool = False
     url: str | None = None
+    version: str | None = None
+    league_source: dict[str, Any] | None = None
+    """Provenance of the league lookup that selected `league` (may itself be stale)."""
+
+    def sources(self) -> list[dict[str, Any]]:
+        """Envelope sources: the league lookup (when known) and this dataset."""
+        return [*([self.league_source] if self.league_source else []), self.source()]
 
     def source(self) -> dict[str, Any]:
         return source(
@@ -99,9 +106,18 @@ def normalize_exchange(payload: Mapping[str, Any], type_name: str) -> list[Row]:
     primary = core.get("primary", "chaos")
     meta = {m["id"]: m for m in [*(core.get("items") or []), *(payload.get("items") or [])]}
     lines = payload.get("lines") or []
-    per_primary = {line["id"]: line.get("primaryValue") for line in lines}
-    per_primary[primary] = 1.0  # one primary unit is worth itself
-    chaos_unit, divine_unit = per_primary.get("chaos"), per_primary.get("divine")
+    rates = core.get("rates") or {}
+    by_line = {line["id"]: line.get("primaryValue") for line in lines}
+
+    def unit(currency: str) -> float | None:
+        """Value of one `currency` in primary units: its own line, else `core.rates`."""
+        if currency == primary:
+            return 1.0
+        if by_line.get(currency):
+            return by_line[currency]
+        return 1 / rates[currency] if rates.get(currency) else None
+
+    chaos_unit, divine_unit = unit("chaos"), unit("divine")
     rows: list[Row] = []
     for line in lines:
         value, volume = line.get("primaryValue"), line.get("volumePrimaryValue")
@@ -120,6 +136,14 @@ def normalize_exchange(payload: Mapping[str, Any], type_name: str) -> list[Row]:
             row["details_id"] = info["detailsId"]
         rows.append(row)
     return rows
+
+
+def divine_chaos(rows: Sequence[Row]) -> float:
+    """Chaos value of one Divine Orb from `Currency` rows."""
+    for row in rows:
+        if row["id"] == "divine" and row["chaos"]:
+            return float(row["chaos"])
+    raise NinjaError("poe.ninja Currency data has no Divine Orb price")
 
 
 def normalize_stash(payload: Mapping[str, Any], type_name: str) -> list[Row]:

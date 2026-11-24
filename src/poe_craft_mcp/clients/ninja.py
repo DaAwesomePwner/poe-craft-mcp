@@ -7,17 +7,17 @@ Every call is served from `ctx.cache` when the data is younger than
 from __future__ import annotations
 
 import logging
-from collections.abc import Iterable
 from typing import Any
 
+from poe_craft_mcp.clients.ninja_history import SnapshotLedger, worth_bulk_recording
 from poe_craft_mcp.clients.ninja_models import (
     ALL_TYPES,
-    SNAPSHOT_MIN_LISTINGS,
     Dataset,
     Kind,
     League,
     NinjaError,
     Row,
+    divine_chaos,
     match_base,
     match_rows,
     normalize_exchange,
@@ -25,7 +25,6 @@ from poe_craft_mcp.clients.ninja_models import (
     resolve_type,
 )
 from poe_craft_mcp.context import AppContext
-from poe_craft_mcp.http.cache import PriceSnapshot
 from poe_craft_mcp.http.fetch import FetchError, FetchResult, cache_key
 
 log = logging.getLogger(__name__)
@@ -41,19 +40,43 @@ class NinjaClient:
 
     def __init__(self, ctx: AppContext) -> None:
         self.ctx = ctx
+        self.ledger = SnapshotLedger(ctx.cache)
         self._interval_s = ctx.config.ninja_min_interval_min * 60.0
-        self._unavailable: dict[str, float] = {}
+        self._failures: dict[str, tuple[float, FetchError]] = {}
         self._warned: set[str] = set()
+        self._rows: dict[str, tuple[str, list[Row]]] = {}
+        self._fetched_at: dict[str, float] = {}
 
-    # -- leagues -------------------------------------------------------------------------
+    # -- fetching ------------------------------------------------------------------------
+
+    async def _get(self, url: str, params: dict[str, str] | None = None) -> FetchResult:
+        """`get_json` plus: a client-error response is remembered for one interval (no
+        re-requests) and, when a cached copy exists, served from it as stale data."""
+        key = cache_key(url, params)
+        known = self._failures.get(key)
+        if known is None or self.ctx.cache.clock() >= known[0]:
+            try:
+                result = await self.ctx.http.get_json(url, params, min_interval_s=self._interval_s)
+            except FetchError as exc:
+                if exc.status is None or exc.status >= 500 or exc.status == 429:
+                    raise  # CachedHttpClient already backs these off
+                known = (self.ctx.cache.clock() + self._interval_s, exc)
+                self._failures[key] = known
+            else:
+                self._failures.pop(key, None)
+                return result
+        cached = await self.ctx.cache.get(key)
+        if cached is not None and known[1].status != 404:
+            log.warning("GET %s failed (%s); serving cached copy", key, known[1].reason)
+            return FetchResult(cached.json(), cached.age_seconds, True, True, key)
+        raise known[1]
 
     async def current_league(self) -> League:
         """`config.league` if explicit (name looked up best-effort), else the first league."""
         config = self.ctx.config
-        url = config.ninja_url(config.ninja_leagues_path)
         explicit = config.league != "auto"
         try:
-            result = await self.ctx.http.get_json(url, min_interval_s=self._interval_s)
+            result = await self._get(config.ninja_url(config.ninja_leagues_path))
         except FetchError:
             if not explicit:
                 raise
@@ -66,13 +89,8 @@ class NinjaClient:
             entry = entries[0]
         else:
             raise NinjaError("poe.ninja returned no leagues")
-        return League(
-            entry["id"],
-            entry.get("name") or entry["id"],
-            result.age_seconds,
-            result.stale,
-            result.source_url,
-        )
+        name = entry.get("name") or entry["id"]
+        return League(entry["id"], name, result.age_seconds, result.stale, result.source_url)
 
     # -- datasets ------------------------------------------------------------------------
 
@@ -82,33 +100,76 @@ class NinjaClient:
             config.ninja_exchange_path if kind == "exchange" else config.ninja_stash_item_path
         )
 
-    async def dataset(self, category: str) -> Dataset:
-        """Normalized rows of one poe.ninja type; `[]` (logged once) if it is empty or gone."""
+    async def dataset(self, category: str, league: League | None = None) -> Dataset:
+        """Normalized rows of one poe.ninja type; `[]` (logged once) if it is empty or gone.
+
+        Pass an already resolved `league` to avoid looking it up again. Failures other than
+        a 404 raise `FetchError` (or return the cached copy marked `stale`).
+        """
         kind, type_name = resolve_type(category)
-        league = (await self.current_league()).id
-        url, params = self._endpoint(kind), {"league": league, "type": type_name}
-        key = cache_key(url, params)
-        now = self.ctx.cache.clock()
-        if now - self._unavailable.get(key, float("-inf")) < self._interval_s:
-            return Dataset(type_name, kind, league, [])
+        league = league or await self.current_league()
+        url, params = self._endpoint(kind), {"league": league.id, "type": type_name}
+        key, clock = cache_key(url, params), self.ctx.cache.clock
+        base = Dataset(type_name, kind, league.id, [], url=key, league_source=league.source())
+
+        peek = await self.ctx.cache.get(key)
+        memo = self._rows.get(key)
+        same_body = peek is not None and memo is not None and memo[0] == peek.etag
+        if (
+            peek is not None
+            and memo is not None
+            and same_body
+            and peek.age_seconds < self._interval_s
+        ):
+            return self._ready(base, memo[1], peek.age_seconds, False, peek.etag)
         try:
-            result = await self.ctx.http.get_json(url, params, min_interval_s=self._interval_s)
+            result = await self._get(url, params)
         except FetchError as exc:
-            if exc.status is None or exc.status >= 500 or exc.status == 429:
+            if exc.status != 404:
                 raise
-            self._unavailable[key] = now
-            self._warn_once(
-                key, "poe.ninja type %s is unavailable (HTTP %s)", type_name, exc.status
-            )
-            return Dataset(type_name, kind, league, [], url=key)
-        payload = result.data if isinstance(result.data, dict) else {}
-        normalize = normalize_exchange if kind == "exchange" else normalize_stash
-        rows = normalize(payload, type_name)
+            self._warn_once(key, "poe.ninja type %s is unavailable (HTTP 404)", type_name)
+            return base
+        if memo is not None and same_body and result.from_cache:
+            rows = memo[1]
+        else:
+            payload = result.data if isinstance(result.data, dict) else {}
+            normalize = normalize_exchange if kind == "exchange" else normalize_stash
+            rows = normalize(payload, type_name)
+        etag = peek.etag if peek is not None and result.from_cache else None
+        if not result.from_cache:  # a fresh 200: the stored body now carries the new ETag
+            stored = await self.ctx.cache.get(key)
+            etag = stored.etag if stored is not None else None
+        if etag is not None:
+            self._rows[key] = (etag, rows)
         if not rows:
             self._warn_once(key, "poe.ninja type %s returned no lines", type_name)
-        elif not result.from_cache:
-            await self._snapshot(league, type_name, kind, rows)
-        return _dataset(type_name, kind, league, rows, result)
+        ds = self._ready(base, rows, result.age_seconds, result.stale, etag, at=clock())
+        if not result.from_cache:
+            await self.ledger.record(ds, [r for r in rows if worth_bulk_recording(ds, r)])
+        return ds
+
+    def _ready(
+        self,
+        base: Dataset,
+        rows: list[Row],
+        age: float,
+        stale: bool,
+        version: str | None,
+        at: float | None = None,
+    ) -> Dataset:
+        now = at if at is not None else self.ctx.cache.clock()
+        self._fetched_at[base.url or ""] = now - age
+        return Dataset(
+            base.type,
+            base.kind,
+            base.league,
+            rows,
+            age,
+            stale,
+            base.url,
+            version,
+            base.league_source,
+        )
 
     async def exchange_overview(self, type_name: str) -> list[Row]:
         """Rows of an exchange type, e.g. `Currency`, `Essence`, `Fossil`."""
@@ -129,38 +190,32 @@ class NinjaClient:
             self._warned.add(key)
             log.warning(message, *args)
 
-    async def _snapshot(self, league: str, type_name: str, kind: Kind, rows: Iterable[Row]) -> None:
-        snapshots = [
-            PriceSnapshot(
-                league, f"ninja:{type_name}", str(r["id"]), r["chaos"], r["volume_or_listings"]
-            )
-            for r in rows
-            if r["chaos"] is not None
-            and (kind == "exchange" or (r["volume_or_listings"] or 0) >= SNAPSHOT_MIN_LISTINGS)
-        ]
-        await self.ctx.cache.add_snapshots(snapshots)
+    async def record(self, ds: Dataset, rows: list[Row]) -> None:
+        """Snapshot rows handed to a caller so every quoted price can be replayed from history."""
+        await self.ledger.record(ds, rows)
 
     async def cached_ages(self, league: str) -> dict[str, float]:
-        """Age in seconds of every poe.ninja dataset currently in the cache, by type."""
-        ages: dict[str, float] = {}
+        """Age in seconds of every poe.ninja dataset in the cache, by type.
+
+        Datasets touched in this process come from memory; the rest are probed in the cache.
+        """
+        now, ages = self.ctx.cache.clock(), {}
         for type_name in ALL_TYPES:
             kind, _ = resolve_type(type_name)
             key = cache_key(self._endpoint(kind), {"league": league, "type": type_name})
-            cached = await self.ctx.cache.get(key)
-            if cached is not None:
+            if key in self._fetched_at:
+                ages[type_name] = round(max(0.0, now - self._fetched_at[key]), 1)
+            elif (cached := await self.ctx.cache.get(key)) is not None:
                 ages[type_name] = round(cached.age_seconds, 1)
         return ages
 
     # -- derived values ------------------------------------------------------------------
 
-    async def chaos_per_divine(self) -> float:
+    async def chaos_per_divine(self, league: League | None = None) -> float:
         """Chaos value of one Divine Orb (from the `Currency` exchange)."""
-        for row in await self.exchange_overview("Currency"):
-            if row["id"] == "divine" and row["chaos"]:
-                return float(row["chaos"])
-        raise NinjaError("poe.ninja Currency data has no Divine Orb price")
+        return divine_chaos((await self.dataset("Currency", league)).rows)
 
-    async def currency_rates(self) -> dict[str, float]:
+    async def currency_rates(self, league: League | None = None) -> dict[str, float]:
         """Chaos value of one unit of each currency, keyed by **trade-site currency id**.
 
         poe.ninja's exchange line ids for the `Currency` type already are the trade site's
@@ -169,7 +224,7 @@ class NinjaClient:
         so no translation table is needed; ids the trade site does not know are harmless.
         `chaos` is always 1.0.
         """
-        rows = await self.exchange_overview("Currency")
+        rows = (await self.dataset("Currency", league)).rows
         rates = {r["id"]: float(r["chaos"]) for r in rows if r["chaos"]}
         rates["chaos"] = 1.0
         return rates
@@ -178,13 +233,14 @@ class NinjaClient:
         """Quote for one item: the row plus `source` {type, id, age_seconds, stale, url}.
 
         Matches `id` first, then `name`; among several name matches (variants) the one
-        with the most listings wins. `None` when nothing matches.
+        with the most listings wins. `None` when nothing matches. The quote is snapshotted.
         """
         ds = await self.dataset(category)
         matches = match_rows(ds.rows, name_or_id)
         if not matches:
             return None
         best = max(matches, key=lambda r: r["volume_or_listings"] or 0)
+        await self.record(ds, [best])
         return quote(best, ds)
 
     async def find_base(
@@ -193,7 +249,10 @@ class NinjaClient:
         """Cheapest matching BaseType row (with `source`), or `None`. See `match_base`."""
         ds = await self.dataset("BaseType")
         row = match_base(ds.rows, base, ilvl_min, influence)
-        return None if row is None else quote(row, ds)
+        if row is None:
+            return None
+        await self.record(ds, [row])
+        return quote(row, ds)
 
 
 def quote(row: Row, ds: Dataset) -> Row:
@@ -206,7 +265,3 @@ def quote(row: Row, ds: Dataset) -> Row:
         "url": ds.url,
     }
     return {**row, "source": src}
-
-
-def _dataset(type_name: str, kind: Kind, league: str, rows: list[Row], res: FetchResult) -> Dataset:
-    return Dataset(type_name, kind, league, rows, res.age_seconds, res.stale, res.source_url)

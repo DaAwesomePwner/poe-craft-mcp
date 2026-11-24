@@ -9,7 +9,7 @@ from mcp.server.mcpserver.exceptions import ToolError
 from mcp.types import ToolAnnotations
 
 from poe_craft_mcp.clients.ninja import get_ninja
-from poe_craft_mcp.clients.ninja_models import NinjaError
+from poe_craft_mcp.clients.ninja_models import NinjaError, divine_chaos
 from poe_craft_mcp.context import AppContext
 from poe_craft_mcp.envelope import envelope
 from poe_craft_mcp.http.fetch import FetchError
@@ -29,8 +29,8 @@ def register(server: MCPServer, ctx: AppContext) -> None:
         cached poe.ninja dataset. POESESSID and trade rate-limit state are not wired up yet."""
         try:
             league = await ninja.current_league()
-            currency = await ninja.dataset("Currency")
-            chaos_per_divine = await ninja.chaos_per_divine()
+            currency = await ninja.dataset("Currency", league)
+            chaos_per_divine = divine_chaos(currency.rows)
             datasets = await ninja.cached_ages(league.id)
         except (NinjaError, FetchError) as exc:
             raise ToolError(str(exc)) from exc
@@ -43,4 +43,4 @@ def register(server: MCPServer, ctx: AppContext) -> None:
             "trade_rate_limit": None,
             "pending": PENDING,
         }
-        return envelope(payload, [league.source(), currency.source()])
+        return envelope(payload, currency.sources())
