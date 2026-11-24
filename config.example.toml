@@ -1,0 +1,42 @@
+# poe-craft-mcp configuration. Copy to config.toml (gitignored) and edit.
+# Lookup order: $POE_CRAFT_CONFIG, then ./config.toml, then built-in defaults.
+# POESESSID never goes here: it is read from the OS keychain or the POESESSID env var.
+
+# League id, or "auto" for the first (current challenge) league from poe.ninja.
+league = "auto"
+
+# Contact sent in the User-Agent to poe.ninja and pathofexile.com, as both ask.
+# Defaults to the project repository URL when unset.
+# contact = "you@example.com"
+
+# Never refresh a poe.ninja dataset more often than this (minutes, 15-1440).
+ninja_min_interval_min = 15
+
+# How long a trade search result stays cached (minutes, 1-1440).
+trade_cache_min = 20
+
+# How many of the cheapest trade listings to fetch per search (1-100).
+trade_sample = 30
+
+# Undercut applied to the 25th-percentile listing price, in percent (0-50).
+undercut_pct = 5
+
+# Outputs with fewer trade listings than this are dropped or flagged.
+min_listings = 10
+
+# Include recipes without a verified_patch for the current patch in rankings.
+include_unverified = false
+
+# DEBUG, INFO, WARNING or ERROR. Logs go to stderr and <data_dir>/logs/.
+log_level = "INFO"
+
+# Where cache.db, gamedata/ and logs/ live. Relative paths are relative to this file.
+# Defaults to the repo's data/ folder.
+# data_dir = "data"
+
+# Upstream endpoints. poe.ninja's API is unversioned, so paths are configurable.
+ninja_base_url = "https://poe.ninja"
+ninja_leagues_path = "/poe1/api/economy/leagues"
+ninja_exchange_path = "/poe1/api/economy/exchange/current/overview"
+ninja_stash_item_path = "/poe1/api/economy/stash/current/item/overview"
+trade_base_url = "https://www.pathofexile.com"
