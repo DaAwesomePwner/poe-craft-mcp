@@ -56,6 +56,7 @@ async def price_sellable(
     info: ClusterNotables,
     conf: Confirmation,
     trade_ids: Mapping[str, str],
+    excluded: frozenset[str],
     jewel: JewelFilter,
     league: str,
     rates: Mapping[str, float],
@@ -68,7 +69,7 @@ async def price_sellable(
     anchors = sorted(frozenset().union(*values))
     warnings: list[str] = []
 
-    miss_search = miss_query(jewel, [trade_ids[m] for m in anchors], trade_ids.values())
+    miss_search = miss_query(jewel, [trade_ids[m] for m in anchors], excluded)
     miss = await trade_value(ctx, league, miss_search, undercut)
     miss_value = miss.chaos
     if miss.empty:

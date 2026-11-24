@@ -14,6 +14,7 @@ from typing import Any
 from poe_craft_mcp.context import AppContext
 from poe_craft_mcp.engine.types import Source
 from poe_craft_mcp.gamedata.combos import ComboOdds
+from poe_craft_mcp.services.combo_confirm import trade_stale
 from poe_craft_mcp.services.trade_pricing import PricingUnavailable, price_outcome
 
 CURRENCY = (
@@ -36,8 +37,8 @@ def chance(value: float | None) -> float | None:
 class TradeValue:
     """A trade search priced at p25 (`chaos` after `undercut`), or why it could not be.
 
-    `chaos` is set only from fresh, convertible listings. `empty` means the search worked and
-    returned no instant-buyout listing at all; otherwise a missing `chaos` has an `error`."""
+    `chaos` is set only from fresh, convertible listings. `empty` means the search reported
+    no instant-buyout listing at all (total 0); otherwise a missing `chaos` has an `error`."""
 
     chaos: float | None
     p25: float | None = None
@@ -59,14 +60,17 @@ async def trade_value(
         wait = f"; retry in about {exc.retry_after:.0f}s" if exc.retry_after is not None else ""
         return TradeValue(None, error=f"{exc.reason}{wait}")
     src = [price.sources[-1]]
-    if price.stale:
+    if trade_stale(price):
         return TradeValue(None, listing_count=price.listing_count, error=STALE, sources=src)
-    if price.raw_count == 0:
+    if price.total == 0:
         return TradeValue(None, listing_count=0, empty=True, sources=src)
     if price.p25 is None:
         unknown = ", ".join(f"{n} {c}" for c, n in sorted(price.dropped_unknown_currency.items()))
         detail = f" (unknown currencies: {unknown})" if unknown else ""
-        error = f"{price.raw_count} listing(s) found but none could be priced{detail}"
+        error = (
+            f"the search reports {price.total} listing(s) but none of the {price.raw_count} "
+            f"fetched could be priced{detail}"
+        )
         return TradeValue(None, listing_count=0, error=error, sources=src)
     chaos = price.p25 * (1 - undercut)
     return TradeValue(chaos, price.p25, price.listing_count, sources=src)

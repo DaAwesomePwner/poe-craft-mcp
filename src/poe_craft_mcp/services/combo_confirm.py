@@ -49,6 +49,12 @@ class Confirmation:
         return [p for p in self.priced if p.sellable]
 
 
+def trade_stale(price: OutcomePrice) -> bool:
+    """True when the trade listings themselves are an expired cached copy (the trade site
+    refused a new search). Stale poe.ninja rates alone do not count: the listings are fresh."""
+    return bool(price.sources[-1].get("stale"))
+
+
 def order_candidates(candidates: Iterable[Pair], weights: Mapping[str, float]) -> list[Pair]:
     """Most likely pairs first: spawn-weight product descending, ties by sorted mod ids."""
     return sorted(candidates, key=lambda p: (-prod(weights[m] for m in p), sorted(p)))
@@ -103,7 +109,7 @@ async def confirm(
         except PricingUnavailable:  # QuoteNotCached, or nothing usable cached
             uncached.append(pair)
             continue
-        if price.stale or price.age_seconds >= fresh_s:
+        if trade_stale(price) or price.age_seconds >= fresh_s:
             uncached.append(pair)
             continue
         out.priced.append(_priced(pair, price, rules, cached=True))
@@ -139,7 +145,7 @@ async def confirm(
             out.errors[pair] = exc.reason
             continue
         out.searched += 1
-        if price.stale:  # the trade site refused the search and an expired copy was served
+        if trade_stale(price):  # the trade site refused the search; an expired copy was served
             out.stopped = (
                 "the trade site served only a stale cached copy (rate limited or failing); "
                 "retry later"

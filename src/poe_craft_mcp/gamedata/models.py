@@ -106,6 +106,8 @@ class GameData:
     trade_stats: dict[str, str] = field(default_factory=dict)
     """Stat id -> explicit trade stat id (e.g. 'explicit.stat_2337273077'); empty when
     stat_translations.json is not in the export or maps nothing."""
+    explicit_trade_ids: dict[str, tuple[str, ...]] = field(default_factory=dict)
+    """Stat id -> every explicit trade stat id that can show it, ambiguous ones included."""
 
     @property
     def stale_warning(self) -> str | None:
@@ -141,6 +143,17 @@ def trade_stat_for(data: GameData, mod: ModDef) -> str:
             "maps only one-stat lines with exactly one explicit trade id"
         )
     return trade
+
+
+def all_explicit_trade_ids(data: GameData, mod: ModDef) -> tuple[str, ...]:
+    """Every explicit trade stat id that can show `mod`, shared or ambiguous ids included
+    (for excluding it from a search); empty when none is known."""
+    found: set[str] = set()
+    for stat in mod.stat_ids:
+        found.update(data.explicit_trade_ids.get(stat, ()))
+        if stat in data.trade_stats:
+            found.add(data.trade_stats[stat])
+    return tuple(sorted(found))
 
 
 def parse_patch(version: str | None) -> tuple[int, int] | None:

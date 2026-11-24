@@ -34,7 +34,8 @@ class Tally:
     fetched: int = 0
     pairs: dict[Pair, list[float]] = field(default_factory=dict)
     multi_notable_listings: int = 0
-    """Listings with three or more of the notables; never attributed to a pair."""
+    """Listings with three or more notables (any the base can roll at any item level);
+    never attributed to a pair."""
     unmatched_listings: int = 0
     """Listings showing fewer than two of the notables (e.g. missing stat data)."""
     dropped_unknown_currency: dict[str, int] = field(default_factory=dict)
@@ -68,8 +69,13 @@ def tally(
     rates: Mapping[str, float],
     mod_by_trade: Mapping[str, str],
     total: int,
+    other_ids: Iterable[str] = (),
 ) -> Tally:
-    """Group listings by the notables (`mod_by_trade`: trade id -> mod id) they show."""
+    """Group listings by the notables (`mod_by_trade`: trade id -> mod id) they show.
+
+    `other_ids` are trade ids of any other notable the base can roll at any item level; a
+    listing showing one of them holds a third notable and is never a pair listing."""
+    others = frozenset(other_ids) - mod_by_trade.keys()
     found = Tally(total=total)
     pairs: defaultdict[Pair, list[float]] = defaultdict(list)
     dropped: Counter[str] = Counter()
@@ -83,10 +89,12 @@ def tally(
         if not isinstance(amount, int | float) or not math.isfinite(amount) or amount <= 0:
             found.unmatched_listings += 1
             continue
-        held = {mod_by_trade[s] for s in item.get("explicit_stats") or [] if s in mod_by_trade}
-        if len(held) == 2:
+        stats = item.get("explicit_stats") or []
+        held = {mod_by_trade[s] for s in stats if s in mod_by_trade}
+        notables = len(held) + bool(others.intersection(stats))
+        if len(held) == 2 and notables == 2:
             pairs[frozenset(held)].append(float(amount) * rate)
-        elif len(held) > 2:
+        elif notables > 2:
             found.multi_notable_listings += 1
         else:
             found.unmatched_listings += 1
@@ -150,6 +158,7 @@ async def discover(
     league: str,
     jewel: JewelFilter,
     mod_by_trade: Mapping[str, str],
+    other_ids: Iterable[str],
     pairs: Iterable[Pair],
     threshold: float,
     *,
@@ -163,7 +172,9 @@ async def discover(
     for bound in ({"below": threshold}, {"at_least": threshold}):
         query = discovery_query(jewel, mod_by_trade.keys(), **bound)
         found, src = await search_listings(ctx, league, query, sample, deadline)
-        tallies.append(tally(found["listings"], rates, mod_by_trade, int(found["total"])))
+        tallies.append(
+            tally(found["listings"], rates, mod_by_trade, int(found["total"]), other_ids)
+        )
         sources.append(src)
     below, above = tallies
     warnings = []

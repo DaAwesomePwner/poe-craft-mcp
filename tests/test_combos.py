@@ -26,6 +26,7 @@ from poe_craft_mcp.gamedata.models import (
     GameData,
     GameDataError,
     ModDef,
+    all_explicit_trade_ids,
     trade_stat_for,
 )
 from poe_craft_mcp.gamedata.records import parse_clusters
@@ -79,6 +80,18 @@ def test_empty_trade_stat_map_does_not_claim_the_file_is_missing(data: GameData)
     with pytest.raises(GameDataError, match="missing or has none for this mod") as raised:
         trade_stat_for(emptied, emptied.mods[WP])
     assert "is not in the export" not in str(raised.value)
+
+
+def test_all_explicit_trade_ids_include_ambiguous_ones(data: GameData) -> None:
+    eye = replace(data.mods[WP], stat_ids=("local_affliction_notable_evil_eye",))
+    assert all_explicit_trade_ids(data, eye) == (
+        "explicit.stat_156080652",
+        "explicit.stat_4291066912",
+    )
+    assert all_explicit_trade_ids(data, data.mods[WP]) == ("explicit.stat_1616734644",)
+    assert all_explicit_trade_ids(data, replace(eye, stat_ids=("nope",))) == ()
+    only_single = replace(data, explicit_trade_ids={})  # e.g. GameData built by hand
+    assert all_explicit_trade_ids(only_single, data.mods[WP]) == ("explicit.stat_1616734644",)
 
 
 def test_trade_option_numbering(data: GameData) -> None:

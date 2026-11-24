@@ -8,7 +8,13 @@ from dataclasses import dataclass
 from typing import Any
 
 from poe_craft_mcp.gamedata.combo_pairs import ClusterNotables
-from poe_craft_mcp.gamedata.models import GameData, GameDataError, ModDef, trade_stat_for
+from poe_craft_mcp.gamedata.models import (
+    GameData,
+    GameDataError,
+    ModDef,
+    all_explicit_trade_ids,
+    trade_stat_for,
+)
 
 Pair = frozenset[str]
 NOTABLE_PREFIX = "1 Added Passive Skill is "
@@ -59,6 +65,27 @@ def priceable(data: GameData, info: ClusterNotables) -> Priceable:
         name = notable_name(data.mods[mod_id])
         warnings.append(f"{name} cannot be priced ({reason}); its {n} pair(s) are unpriceable")
     return Priceable(trade_ids, pairs, unpriced, tuple(warnings))
+
+
+def exclusion_ids(data: GameData, *infos: ClusterNotables) -> tuple[frozenset[str], list[str]]:
+    """Every explicit trade id of every notable in `infos` (pass the pool at the top item
+    level too: sale searches accept any ilvl), shared or ambiguous ids included, so a `not`
+    group or the discovery grouping can rule out jewels with a third notable. Warns about
+    notables with no explicit trade id at all, which no search can exclude."""
+    ids: set[str] = set()
+    missing: dict[str, str] = {}
+    for info in infos:
+        for entry in info.notables:
+            found = all_explicit_trade_ids(data, entry.mod)
+            ids.update(found)
+            if not found:
+                missing[entry.mod.id] = notable_name(entry.mod)
+    warnings = [
+        f"{name} has no explicit trade id, so pair and miss listings may include it as a "
+        "third notable"
+        for _, name in sorted(missing.items())
+    ]
+    return frozenset(ids), warnings
 
 
 def enchant_option(data: GameData, info: ClusterNotables) -> int:

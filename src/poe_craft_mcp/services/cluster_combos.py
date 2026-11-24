@@ -24,6 +24,7 @@ from poe_craft_mcp.services.combo_confirm import Rules, confirm, order_candidate
 from poe_craft_mcp.services.combo_discovery import discover
 from poe_craft_mcp.services.combo_notables import (
     enchant_option,
+    exclusion_ids,
     pair_names,
     pair_row,
     priceable,
@@ -78,6 +79,10 @@ async def cluster_combos(
     option = enchant_option(data, info)
     split = priceable(data, info)
     warnings += split.warnings
+    # Sale searches accept any item level: rule out every notable the base can ever roll.
+    top = cluster_notables(data, req.base, 100, req.enchant, req.passives)
+    excluded, unexcludable = exclusion_ids(data, info, top)
+    warnings += unexcludable
     out["notables"] = {
         "count": len(info.notables),
         "priceable": len(split.trade_ids),
@@ -92,6 +97,11 @@ async def cluster_combos(
 
     league, currency, per_divine = await _rates(ctx)
     rates = rates_from(currency.rows)
+    if any(src.get("stale") for src in currency.sources()):
+        warnings.append(
+            "poe.ninja currency rates are an old cached copy (poe.ninja is failing); listing "
+            "prices are converted with them"
+        )
     threshold = req.min_value_div * per_divine
     undercut = ctx.config.undercut_pct / 100
     out.update(
@@ -108,6 +118,7 @@ async def cluster_combos(
         league,
         jewel,
         split.mod_by_trade,
+        excluded,
         split.pairs,
         threshold,
         sample=req.discovery_sample,
@@ -136,7 +147,7 @@ async def cluster_combos(
         ctx,
         league,
         ordered,
-        lambda p: pair_query(jewel, *(ids[m] for m in sorted(p)), ids.values()),
+        lambda p: pair_query(jewel, *(ids[m] for m in sorted(p)), excluded),
         rules,
     )
     cache_min = ctx.config.trade_cache_min
@@ -152,7 +163,9 @@ async def cluster_combos(
         all_sources = unique_sources(sources)
         return {**out, "assumptions": assumptions, "warnings": unique(warnings)}, all_sources
 
-    valued = await price_sellable(ctx, data, req, info, conf, ids, jewel, league, rates, per_divine)
+    valued = await price_sellable(
+        ctx, data, req, info, conf, ids, excluded, jewel, league, rates, per_divine
+    )
     out["sellable_pairs"] = sellable_rows(data, conf, ids, per_divine, valued.odds)
     out["economics"] = valued.economics
     out["miss_listings"], out["base_listings"] = valued.miss_listings, valued.base_listings

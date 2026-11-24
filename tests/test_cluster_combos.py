@@ -667,11 +667,12 @@ async def test_unconvertible_miss_and_base_stay_unknown(
     assert econ["costs"]["base"] is None and econ["profit_per_attempt"] is None
     warnings = payload["warnings"]
     assert any(
-        w.startswith("miss value unavailable (3 listing(s) found but none could be priced")
+        w.startswith("miss value unavailable (the search reports 3 listing(s) but none of the 3")
         and "3 nonsense" in w
         for w in warnings
     )
-    assert any("white base price unavailable (2 listing(s)" in w for w in warnings)
+    base_warning = "white base price unavailable (the search reports 2 listing(s)"
+    assert any(base_warning in w for w in warnings)
     assert not any("valued at 0" in w for w in warnings)
 
 
@@ -740,3 +741,97 @@ def test_pool_change_counts_non_notable_mods(data: GameData) -> None:
     assert pool_change(info, info) is None
     doubled = tuple(replace(e, multiplier=2 * e.multiplier) if e is small else e for e in info.pool)
     assert pool_change(info, replace(info, pool=doubled)) == f"reweights: {small.mod.id}"
+
+
+# --- review round 2 ---------------------------------------------------------------------------
+
+EYE = ("explicit.stat_156080652", "explicit.stat_4291066912")  # Evil Eye, shared ids
+
+
+def test_tally_counts_any_other_notable_as_a_third() -> None:
+    mods = {T_WP: WP, T_ES: ES}
+    listings = [
+        {"amount": 1, "currency": "chaos", "explicit_stats": [T_ES, T_WP]},
+        {"amount": 2, "currency": "chaos", "explicit_stats": [T_ES, T_WP, T_LT]},
+        {"amount": 3, "currency": "chaos", "explicit_stats": [T_WP, T_LT]},
+    ]
+    found = tally(listings, {"chaos": 1.0}, mods, total=3, other_ids=[T_LT, T_WP])
+    assert found.pairs == {pair(ES, WP): [1.0]}
+    assert (found.multi_notable_listings, found.unmatched_listings) == (1, 1)
+
+
+async def test_higher_ilvl_notables_are_excluded(
+    ctx: AppContext, fake: FakeTrade, data: GameData
+) -> None:
+    """At ilvl 50 only ES and WP roll, but sale searches take any ilvl: an ES+WP+LT jewel
+    (LT unlocks at 68) must not count as an ES+WP listing."""
+    scenario(fake)
+    fake.responses[pkey(T_ES, T_WP)] = [(2, "divine", (T_ES, T_WP))] + [
+        (5, "divine", (T_ES, T_WP, T_LT))
+    ] * 2
+    payload, _ = await cluster_combos(ctx, data, request(ilvl=50))
+    sent = next(b for b in fake.searches if fake.key(b) == pkey(T_ES, T_WP))
+    assert sent["query"]["stats"][2] == NOT_LT_FL
+    assert payload["sellable_pairs"] == [] and payload["confirmation"]["not_sellable"] == 1
+    assert payload["discovery"]["below_threshold"]["multi_notable_listings"] == 1
+    brush = "Brush with Death has no explicit trade id, so pair and miss listings may include it"
+    assert any(w.startswith(brush) for w in payload["warnings"])
+
+
+async def test_ambiguous_ids_join_the_exclusion(
+    ctx: AppContext, fake: FakeTrade, data: GameData
+) -> None:
+    """A notable with no single trade id (here Brush with Death given Evil Eye's two shared
+    ids) cannot be priced, but every one of its ids is excluded from pair and miss searches."""
+    eyed = replace(
+        data,
+        explicit_trade_ids={
+            **data.explicit_trade_ids,
+            "local_affliction_notable_brush_with_death": EYE,
+        },
+    )
+    scenario(fake)
+    payload, _ = await cluster_combos(ctx, eyed, request())
+    everything_else = {"type": "not", "filters": [{"id": i} for i in (T_LT, T_FL, *EYE)]}
+    sent = next(b for b in fake.searches if fake.key(b) == pkey(T_ES, T_WP))
+    assert sent["query"]["stats"][2] == everything_else
+    miss = next(b for b in fake.searches if fake.key(b) == "miss")
+    assert miss["query"]["stats"][2] == {
+        "type": "not",
+        "filters": [{"id": i} for i in (T_LT, *EYE)],  # ES, FL and WP are the anchors
+    }
+    assert not any("has no explicit trade id" in w for w in payload["warnings"])
+    assert payload["notables"]["priceable"] == 4
+
+
+async def test_miss_with_listings_that_vanish_is_unknown(
+    ctx: AppContext, fake: FakeTrade, data: GameData
+) -> None:
+    """The search reports 10 listings but none can be fetched: not "none listed"."""
+    scenario(fake)
+    fake.responses["miss"] = []
+    fake.totals["miss"] = 10
+    payload, _ = await cluster_combos(ctx, data, request())
+    econ = payload["economics"]
+    assert econ["miss_value"] is None and econ["expected_value"] is None
+    assert econ["profit_per_attempt"] is None
+    assert any(
+        "the search reports 10 listing(s) but none of the 0" in w for w in payload["warnings"]
+    )
+    assert not any("valued at 0" in w for w in payload["warnings"])
+
+
+async def test_stale_ninja_rates_alone_do_not_stop_confirmation(
+    ctx: AppContext, api: NinjaApi, fake: FakeTrade, data: GameData, clock: FakeClock
+) -> None:
+    scenario(fake)
+    await cluster_combos(ctx, data, request())
+    clock.advance(25 * 60)  # pair searches expire; poe.ninja is due again and fails
+    api.fail("Currency", 500)
+    payload, _ = await cluster_combos(ctx, data, request())
+    conf = payload["confirmation"]
+    assert conf["stopped"] is None and conf["live_searches"] == 3 and conf["sellable"] == 2
+    assert payload["economics"]["profit_per_attempt"] is not None
+    warnings = payload["warnings"]
+    assert any(w.startswith("poe.ninja currency rates are an old cached copy") for w in warnings)
+    assert not any("stale cached copy" in w for w in warnings)
