@@ -68,5 +68,25 @@
    "ring",
    "default"
   ]
+ },
+ "Metadata/Items/Rings/RingE6": {
+  "domain": "item",
+  "drop_level": 75,
+  "implicits": [
+   "MaxPrefixMaxSuffixImplicitE6"
+  ],
+  "inherits_from": "Metadata/Items/Rings/AbstractRing",
+  "inventory_height": 1,
+  "inventory_width": 1,
+  "item_class": "Ring",
+  "name": "Helical Ring",
+  "properties": {},
+  "release_state": "released",
+  "tags": [
+   "not_for_sale",
+   "experimental_base",
+   "ring",
+   "default"
+  ]
  }
 }

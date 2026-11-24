@@ -21,6 +21,8 @@ import pytest
 from mcp import Client
 
 from poe_craft_mcp.config import Config
+from poe_craft_mcp.gamedata import odds as odds_module
+from poe_craft_mcp.gamedata.draws import RARE, Candidate, CountModel, Estimate, Start, monte_carlo
 from poe_craft_mcp.gamedata.loader import load_gamedata
 from poe_craft_mcp.gamedata.models import GameData, GameDataError
 from poe_craft_mcp.gamedata.odds import attempts_for, mod_odds
@@ -116,8 +118,40 @@ def test_essence_forced_mod_takes_slot_and_group(data: GameData) -> None:
     blocked = mod_odds(data, "Vaal Regalia", 5, ["IncreasedLife0"], method)
     assert blocked["chance_per_attempt"] == 0
     assert any("shares a mod group" in w for w in blocked["warnings"])
-    late = mod_odds(data, "Vaal Regalia", 40, ["FireResist1"], "essence:greed1")
-    assert any("item_level_restriction=35" in w for w in late["warnings"])
+
+
+def test_essence_caps_item_level_of_random_mods(data: GameData) -> None:
+    # Whispering Essence of Greed has item_level_restriction 35; FireResist6 needs level 60.
+    high = mod_odds(data, "Vaal Regalia", 86, ["FireResist6"], "essence:greed1")
+    assert high["chance_per_attempt"] == 0 and "FireResist6" not in weights(high)
+    (warning,) = [w for w in high["warnings"] if "FireResist6" in w]
+    assert "needs item level 60" in warning and "caps item level at 35" in warning
+    fire_86 = mod_odds(data, "Vaal Regalia", 86, ["FireResist1"], "essence:greed1")
+    fire_35 = mod_odds(data, "Vaal Regalia", 35, ["FireResist1"], "essence:greed1")
+    assert fire_86["chance_per_attempt"] == fire_35["chance_per_attempt"]
+    assert fire_86["weight_table"] == fire_35["weight_table"]
+    chaos = mod_odds(data, "Vaal Regalia", 86, ["FireResist6"], "chaos")
+    assert chaos["chance_per_attempt"] > 0
+
+
+def test_helical_ring_affix_limits(data: GameData) -> None:
+    # Helical Ring implicit: -2 prefixes, +1 suffix -> 1 prefix, 4 suffixes. At ilvl 1 the ring
+    # pool is 2 prefixes + 3 suffixes, so every 4-6 affix roll ends with 1 prefix + 3 suffixes
+    # and AddedFireDamage1 hits iff it is the first prefix drawn: 500 / (500 + 1000).
+    result = mod_odds(data, "Helical Ring", 1, ["AddedFireDamage1"], "chaos")
+    assert result["chance_per_attempt"] == pytest.approx(500 / 1500, abs=1e-8)
+    assert result["affix_limits"] == {"prefix": 1, "suffix": 4}
+    assert any("allows 1 prefix(es) and 4 suffix(es)" in w for w in result["warnings"])
+    plain = mod_odds(data, "Two-Stone Ring", 1, ["AddedFireDamage1"], "chaos")
+    unlimited = RARE_4 * (1 - p_last(500, [1000, 1000, 1000, 400])) + RARE_5_OR_6
+    assert plain["chance_per_attempt"] == pytest.approx(unlimited, abs=1e-8)
+    with pytest.raises(GameDataError, match="not modelled for Helical Ring"):
+        mod_odds(data, "Helical Ring", 1, ["AddedFireDamage1"], "alt")
+
+
+def test_fossil_with_unmodelled_effect_is_rejected(data: GameData) -> None:
+    with pytest.raises(GameDataError, match=r"Sanctified Fossil is not modelled: lucky"):
+        mod_odds(data, "Vaal Regalia", 86, ["FireResist1"], "fossil:pristine,sanctified")
 
 
 def test_fossil_multipliers_and_forbidden_mods(data: GameData) -> None:
@@ -148,6 +182,36 @@ def test_monte_carlo_is_seeded_and_agrees_with_exact(data: GameData) -> None:
     assert abs(sampled["chance_per_attempt"] - exact) < 4 * calc["std_error"]
     again = mod_odds(*args, force_monte_carlo=True)
     assert again["chance_per_attempt"] == sampled["chance_per_attempt"]
+    low, high = calc["ci95"]
+    assert calc["resolved"] is True and low < exact < high
+
+
+def test_monte_carlo_without_hits_is_unresolved() -> None:
+    pool = [
+        Candidate("rare_target", True, frozenset({"T"}), 1e-9, True),
+        *(Candidate(f"m{i}", i % 2 == 0, frozenset({f"g{i}"}), 1000, False) for i in range(12)),
+    ]
+    estimate = monte_carlo(pool, RARE, Start(), samples=2000)
+    assert estimate.resolved is False and estimate.std_error is None
+    assert estimate.upper_bound_95 == pytest.approx(1 - 0.05 ** (1 / 2000))
+    assert estimate.upper_bound_95 == pytest.approx(3 / 2000, rel=0.01)
+
+
+def test_unresolved_estimate_is_not_reported_as_zero(
+    data: GameData, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def no_hits(pool: list[Candidate], model: CountModel, start: Start, force: bool) -> Estimate:
+        return Estimate(
+            0.0, "monte_carlo", samples=20000, seed=1729, resolved=False, upper_bound_95=1.5e-4
+        )
+
+    monkeypatch.setattr(odds_module, "hit_probability", no_hits)
+    result = mod_odds(data, "Two-Stone Ring", 1, ["Strength1"], "chaos")
+    assert result["chance_per_attempt"] is None
+    assert result["expected_attempts"] is None and result["n90"] is None
+    assert result["calculation"]["resolved"] is False
+    assert result["calculation"]["upper_bound_95"] == 1.5e-4
+    assert any("unresolved" in w and "1.50e-04" in w for w in result["warnings"])
 
 
 def test_attempts_for() -> None:

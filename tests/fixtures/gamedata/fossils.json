@@ -64,5 +64,24 @@
   "rolls_lucky": false,
   "rolls_white_sockets": false,
   "sell_price_mods": []
+ },
+ "Metadata/Items/Currency/CurrencyDelveCraftingLuckyModRolls": {
+  "added_mods": [],
+  "allowed_tags": [],
+  "blocked_descriptions": {},
+  "changes_quality": false,
+  "corrupted_essence_chance": 0,
+  "descriptions": {
+   "LuckyMods": "Numeric modifier values are lucky\r\nHigh Level modifiers are more common"
+  },
+  "forbidden_tags": [],
+  "forced_mods": [],
+  "mirrors": false,
+  "name": "Sanctified Fossil",
+  "negative_mod_weights": [],
+  "positive_mod_weights": [],
+  "rolls_lucky": true,
+  "rolls_white_sockets": false,
+  "sell_price_mods": []
  }
 }

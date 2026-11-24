@@ -1,14 +1,17 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import shutil
 from pathlib import Path
 
+import httpx
 import pytest
 
 from poe_craft_mcp.config import Config
 from poe_craft_mcp.context import AppContext
-from poe_craft_mcp.gamedata.loader import get_gamedata, load_gamedata
+from poe_craft_mcp.gamedata.fetch import FetchError, fetch_export
+from poe_craft_mcp.gamedata.loader import EXPORT_FILES, get_gamedata, load_gamedata
 from poe_craft_mcp.gamedata.lookup import resolve_base, resolve_essence, resolve_fossils
 from poe_craft_mcp.gamedata.models import GameData, GameDataError, parse_patch
 from poe_craft_mcp.gamedata.pool import PoolEntry, entry_for, first_match
@@ -128,3 +131,74 @@ def test_entry_for_exclusions(data: GameData) -> None:
     assert isinstance(entry_for(data.mods["ChaosResist1"], regalia, 16), PoolEntry)
     assert "essence-only" in str(entry_for(data.mods["StrengthEssence7_"], ring, 86))
     assert "domain" in str(entry_for(strength, jewel, 86))
+
+
+def test_affix_limit_implicit_and_unmodelled_fossil_parsed(data: GameData) -> None:
+    helical, _ = resolve_base(data, "Helical Ring")
+    assert (helical.prefix_delta, helical.suffix_delta) == (-2, 1)
+    two_stone, _ = resolve_base(data, "Two-Stone Ring")
+    assert (two_stone.prefix_delta, two_stone.suffix_delta) == (0, 0)
+    (sanctified,) = resolve_fossils(data, ["sanctified"])
+    assert sanctified.unmodelled and "lucky" in sanctified.unmodelled[0]
+    (pristine,) = resolve_fossils(data, ["pristine"])
+    assert pristine.unmodelled == ()
+
+
+def _export_transport(fail: str | None = None) -> httpx.MockTransport:
+    def handler(request: httpx.Request) -> httpx.Response:
+        name = request.url.path.lstrip("/")
+        if name == "version.txt":
+            return httpx.Response(200, text="3.30.0.4.3")
+        stem = name.removesuffix(".min.json")
+        if stem == fail:
+            return httpx.Response(500)
+        path = FIXTURE_DIR / f"{stem}.json"
+        return httpx.Response(200, content=path.read_bytes() if path.is_file() else b"{}")
+
+    return httpx.MockTransport(handler)
+
+
+def test_fetch_publishes_complete_verified_export(tmp_path: Path) -> None:
+    target = tmp_path / "gamedata"
+    with httpx.Client(transport=_export_transport()) as client:
+        manifest = fetch_export(target, "test-agent", client=client)
+    assert manifest["game_version"] == "3.30.0.4.3"
+    assert set(manifest["files"]) == set(EXPORT_FILES)
+    assert not (tmp_path / "gamedata.staging").exists()
+    loaded = load_gamedata(target)
+    assert loaded.game_version == "3.30.0.4.3" and "Strength1" in loaded.mods
+
+
+def test_failed_fetch_keeps_previous_export(tmp_path: Path) -> None:
+    target = _copy_export(tmp_path / "gamedata", {"game_version": "3.30.0", "marker": "old"})
+    before = {p.name: p.read_bytes() for p in target.iterdir()}
+    with (
+        httpx.Client(transport=_export_transport(fail="base_items")) as client,
+        pytest.raises(FetchError, match="500"),
+    ):
+        fetch_export(target, "test-agent", client=client)
+    assert {p.name: p.read_bytes() for p in target.iterdir()} == before
+    assert not (tmp_path / "gamedata.staging").exists()
+
+
+def test_oversized_download_aborts_and_keeps_previous_export(tmp_path: Path) -> None:
+    target = _copy_export(tmp_path / "gamedata", {"game_version": "3.30.0"})
+    before = {p.name: p.read_bytes() for p in target.iterdir()}
+    with (
+        httpx.Client(transport=_export_transport()) as client,
+        pytest.raises(FetchError, match="larger than 1000 bytes"),
+    ):
+        fetch_export(target, "test-agent", client=client, max_bytes=1000)
+    assert {p.name: p.read_bytes() for p in target.iterdir()} == before
+
+
+def test_loader_rejects_files_not_matching_manifest(tmp_path: Path) -> None:
+    files = {
+        name: {"sha256": hashlib.sha256((FIXTURE_DIR / f"{name}.json").read_bytes()).hexdigest()}
+        for name in ("mods", "base_items", "essences", "fossils")
+    }
+    export = _copy_export(tmp_path / "gd", {"game_version": "3.30.0", "files": files})
+    assert load_gamedata(export).game_version == "3.30.0"
+    (export / "base_items.json").write_text("{}", encoding="utf-8")
+    with pytest.raises(GameDataError, match="does not match manifest"):
+        load_gamedata(export)

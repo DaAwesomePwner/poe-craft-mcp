@@ -244,6 +244,58 @@
   "text": "+(6-11)% to Fire Resistance",
   "type": "FireResistance"
  },
+ "FireResist6": {
+  "adds_tags": [],
+  "domain": "item",
+  "generation_type": "suffix",
+  "generation_weights": [],
+  "groups": [
+   "FireResistance"
+  ],
+  "implicit_tags": [
+   "elemental",
+   "fire",
+   "resistance"
+  ],
+  "is_essence_only": false,
+  "name": "of the Volcano",
+  "required_level": 60,
+  "spawn_weights": [
+   {
+    "tag": "armour",
+    "weight": 1000
+   },
+   {
+    "tag": "ring",
+    "weight": 1000
+   },
+   {
+    "tag": "amulet",
+    "weight": 1000
+   },
+   {
+    "tag": "belt",
+    "weight": 1000
+   },
+   {
+    "tag": "quiver",
+    "weight": 1000
+   },
+   {
+    "tag": "default",
+    "weight": 0
+   }
+  ],
+  "stats": [
+   {
+    "id": "base_fire_damage_resistance_%",
+    "max": 41,
+    "min": 36
+   }
+  ],
+  "text": "+(36-41)% to Fire Resistance",
+  "type": "FireResistance"
+ },
  "IncreasedLife0": {
   "adds_tags": [],
   "domain": "item",
@@ -395,6 +447,49 @@
   ],
   "text": "(11-28)% increased Energy Shield",
   "type": "LocalEnergyShieldPercent"
+ },
+ "MaxPrefixMaxSuffixImplicitE6": {
+  "adds_tags": [],
+  "domain": "item",
+  "generation_type": "unique",
+  "generation_weights": [],
+  "groups": [
+   "MaxPrefixMaxSuffix"
+  ],
+  "implicit_tags": [],
+  "is_essence_only": false,
+  "name": "",
+  "required_level": 30,
+  "spawn_weights": [],
+  "stats": [
+   {
+    "id": "local_maximum_prefixes_allowed_+",
+    "max": -2,
+    "min": -2
+   },
+   {
+    "id": "local_maximum_suffixes_allowed_+",
+    "max": 1,
+    "min": 1
+   },
+   {
+    "id": "local_implicit_mod_cannot_be_changed",
+    "max": 1,
+    "min": 1
+   },
+   {
+    "id": "local_suffix_mod_effect_+%",
+    "max": 50,
+    "min": 50
+   },
+   {
+    "id": "local_prefix_mod_effect_+%",
+    "max": 0,
+    "min": 0
+   }
+  ],
+  "text": "-2 Prefix Modifiers allowed\n+1 Suffix Modifier allowed\nImplicit Modifiers Cannot Be Changed\n50% increased Suffix Modifier magnitudes",
+  "type": "MaxPrefixMaxSuffixImplicit"
  },
  "Strength1": {
   "adds_tags": [],

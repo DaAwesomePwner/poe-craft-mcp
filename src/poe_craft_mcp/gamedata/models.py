@@ -39,6 +39,9 @@ class BaseItem:
     item_class: str
     tags: frozenset[str]
     release_state: str
+    prefix_delta: int = 0
+    suffix_delta: int = 0
+    """Change to the allowed prefix/suffix count from implicits (e.g. Helical Ring: -2, +1)."""
 
 
 @dataclass(frozen=True)
@@ -59,6 +62,7 @@ class Fossil:
     allowed_tags: frozenset[str]
     forbidden_tags: frozenset[str]
     unmodelled: tuple[str, ...]
+    """Effects not expressible as weights/added/forced mods; such fossils are rejected."""
 
 
 @dataclass(frozen=True)

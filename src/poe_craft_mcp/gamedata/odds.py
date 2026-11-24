@@ -8,7 +8,7 @@ from typing import Any
 
 from poe_craft_mcp.gamedata.draws import Candidate, Estimate, Start, hit_probability
 from poe_craft_mcp.gamedata.lookup import resolve_base, resolve_mods
-from poe_craft_mcp.gamedata.method import parse_method
+from poe_craft_mcp.gamedata.method import CraftSetup, parse_method
 from poe_craft_mcp.gamedata.models import GameData, GameDataError
 from poe_craft_mcp.gamedata.pool import PoolEntry, build_pool, entry_for
 
@@ -69,12 +69,28 @@ def _table(pool: Sequence[PoolEntry], targets: set[str]) -> dict[str, Any]:
 
 
 def _calculation(estimate: Estimate) -> dict[str, Any]:
-    calc: dict[str, Any] = {"method": estimate.method}
+    calc: dict[str, Any] = {"method": estimate.method, "resolved": estimate.resolved}
     if estimate.method == "monte_carlo":
-        calc.update(samples=estimate.samples, seed=estimate.seed, std_error=estimate.std_error)
+        calc.update(samples=estimate.samples, seed=estimate.seed)
+        if estimate.resolved:
+            calc["std_error"] = round(estimate.std_error or 0.0, 8)
+            calc["ci95"] = [round(x, 8) for x in estimate.ci95 or ()]
+        else:
+            calc["upper_bound_95"] = round(estimate.upper_bound_95 or 0.0, 8)
     if estimate.detail:
         calc["chance_by_affix_count"] = {k: round(v, 6) for k, v in estimate.detail.items()}
     return calc
+
+
+def _start(setup: CraftSetup) -> Start:
+    start = Start(
+        groups=frozenset(g for m in setup.forced for g in m.groups),
+        prefixes=sum(m.generation_type == "prefix" for m in setup.forced),
+        suffixes=sum(m.generation_type == "suffix" for m in setup.forced),
+    )
+    if start.prefixes > setup.model.max_prefix or start.suffixes > setup.model.max_suffix:
+        raise GameDataError(f"forced mod(s) of {setup.label} exceed this base's affix limits")
+    return start
 
 
 def mod_odds(
@@ -86,23 +102,21 @@ def mod_odds(
     *,
     force_monte_carlo: bool = False,
 ) -> dict[str, Any]:
-    """Chance per attempt of hitting any of `target_mods` on `base` at `ilvl` with `method`."""
+    """Chance per attempt of hitting any of `target_mods` on `base` at `ilvl` with `method`.
+
+    `chance_per_attempt` is None when sampling saw no hit; `calculation.upper_bound_95` then
+    bounds it."""
     if not 1 <= ilvl <= 100:
         raise GameDataError(f"ilvl must be between 1 and 100 (got {ilvl})")
     if not target_mods:
         raise GameDataError("target_mods must list at least one mod id, e.g. ['IncreasedLife7']")
     item, warnings = resolve_base(data, base)
     targets = resolve_mods(data, dict.fromkeys(target_mods))
-    setup = parse_method(data, item, ilvl, method)
+    setup = parse_method(data, item, method)
     warnings += list(setup.warnings)
-
-    forced_groups = frozenset(g for m in setup.forced for g in m.groups)
-    start = Start(
-        groups=forced_groups,
-        prefixes=sum(m.generation_type == "prefix" for m in setup.forced),
-        suffixes=sum(m.generation_type == "suffix" for m in setup.forced),
-    )
-    pool = build_pool(data, item, ilvl, setup.fossils, blocked_groups=forced_groups)
+    start = _start(setup)
+    roll_ilvl = min(ilvl, setup.ilvl_cap) if setup.ilvl_cap is not None else ilvl
+    pool = build_pool(data, item, roll_ilvl, setup.fossils, blocked_groups=start.groups)
     target_ids = {m.id for m in targets}
     pooled = {e.mod.id for e in pool}
     forced_ids = {m.id for m in setup.forced}
@@ -110,9 +124,11 @@ def mod_odds(
     for mod in targets:
         if mod.id in forced_ids or mod.id in pooled:
             continue
-        reason = entry_for(mod, item, ilvl, setup.fossils, added)
+        reason = entry_for(mod, item, roll_ilvl, setup.fossils, added)
         if isinstance(reason, PoolEntry):
             reason = f"{mod.id} shares a mod group with the forced mod, so it cannot roll"
+        elif roll_ilvl < ilvl:
+            reason += f"; {setup.label} caps item level at {roll_ilvl} for the other mods"
         warnings.append(f"target cannot roll: {reason}")
 
     if target_ids & forced_ids:
@@ -130,7 +146,12 @@ def mod_odds(
         ]
         estimate = hit_probability(candidates, setup.model, start, force_monte_carlo)
 
-    p = estimate.probability
+    p: float | None = estimate.probability if estimate.resolved else None
+    if not estimate.resolved:
+        warnings.append(
+            f"no hit in {estimate.samples} Monte Carlo samples; the chance is unresolved and "
+            f"below {estimate.upper_bound_95:.2e} per attempt (95% one-sided bound)"
+        )
     if data.stale_warning:
         warnings.insert(0, data.stale_warning)
     return {
@@ -138,12 +159,13 @@ def mod_odds(
         "ilvl": ilvl,
         "method": setup.label,
         "target_mods": [m.id for m in targets],
-        "chance_per_attempt": round(p, 8),
-        "expected_attempts": round(1 / p, 2) if p > 0 else None,
-        "n90": attempts_for(p),
+        "chance_per_attempt": None if p is None else round(p, 8),
+        "expected_attempts": round(1 / p, 2) if p else None,
+        "n90": attempts_for(p) if p is not None else None,
         "calculation": _calculation(estimate),
         "forced_mods": sorted(forced_ids),
         "weight_table": _table(pool, target_ids),
+        "affix_limits": {"prefix": setup.model.max_prefix, "suffix": setup.model.max_suffix},
         "assumptions": [*GENERAL_ASSUMPTIONS, *setup.assumptions],
         "export_version": data.game_version,
         "warnings": warnings,
