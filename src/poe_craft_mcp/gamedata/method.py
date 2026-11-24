@@ -9,8 +9,16 @@ from poe_craft_mcp.gamedata.lookup import resolve_essence, resolve_fossils
 from poe_craft_mcp.gamedata.models import BaseItem, Fossil, GameData, GameDataError, ModDef
 
 RARE_DOMAINS = frozenset({"item"})
-MAGIC_DOMAINS = frozenset({"item", "flask", "jewel", "abyss_jewel"})
-METHOD_HELP = "use 'chaos', 'alt', 'essence:<essence>' or 'fossil:<fossil>[,<fossil>...]'"
+MAGIC_DOMAINS = frozenset({"item", "flask", "jewel", "abyss_jewel", "affliction_jewel"})
+REGAL_DOMAINS = frozenset({"item", "jewel", "abyss_jewel", "affliction_jewel"})
+JEWEL_DOMAINS = frozenset({"jewel", "abyss_jewel", "affliction_jewel"})
+KIND_DOMAINS = {"rare": RARE_DOMAINS, "magic": MAGIC_DOMAINS, "regal": REGAL_DOMAINS}
+METHOD_HELP = (
+    "use 'chaos', 'alt', 'alt_aug', 'regal' (with existing_mods), 'essence:<essence>' or "
+    "'fossil:<fossil>[,<fossil>...]'"
+)
+RARE_JEWEL = replace(RARE, max_prefix=2, max_suffix=2)
+"""Rare jewels (cluster jewels included) hold at most four affixes, two of each side."""
 
 RARE_COUNT = (
     "Rare items get 4 affixes (8/12), 5 (3/12) or 6 (1/12), at most 3 prefixes and 3 suffixes "
@@ -20,12 +28,34 @@ RARE_COUNT = (
 MAGIC_COUNT = (
     "Alteration gives 1 or 2 affixes with equal chance (assumed), at most 1 prefix and 1 suffix"
 )
+ALT_AUG_RULE = (
+    "alt_aug cycle: Alteration, then an Augmentation only when the Alteration gave one affix "
+    "that is not a target; the Augmentation's affix is drawn like an Alteration's second affix, "
+    "so a cycle succeeds as often as a 2-affix Alteration"
+)
+AUG_SPENDING_RULE = (
+    "Augmentation is used only when the open affix side can still roll a target (no shared mod "
+    "group); after a lone non-target affix whose open side holds no target, the next "
+    "Alteration is used instead. Success odds are the same either way; expected_materials "
+    "(alteration and augmentation per success) count currency under this rule"
+)
+REGAL_RULE = (
+    "Regal Orb adds exactly one affix to the magic item in existing_mods, drawn from the mods "
+    "still allowed (no mod group shared with existing_mods, side below the rare limit); tags the "
+    "existing mods add (adds_tags) apply"
+)
+JEWEL_LIMITS = (
+    "Rare jewels have at most 2 prefixes and 2 suffixes (four affixes; "
+    "https://www.poewiki.net/wiki/Cluster_jewel and https://www.poewiki.net/wiki/Jewel)"
+)
 
 
 @dataclass(frozen=True)
 class CraftSetup:
     label: str
     model: CountModel
+    kind: str = "rare"
+    """'rare' (chaos/essence/fossil), 'magic' (alt, alt_aug) or 'regal'."""
     fossils: tuple[Fossil, ...] = ()
     forced: tuple[ModDef, ...] = ()
     ilvl_cap: int | None = None
@@ -40,12 +70,12 @@ def _forced_mod(data: GameData, mod_id: str, owner: str) -> ModDef:
     return mod
 
 
-def _check_domain(base: BaseItem, model: CountModel, label: str) -> None:
-    domains = RARE_DOMAINS if model.name == "rare" else MAGIC_DOMAINS
+def _check_domain(base: BaseItem, setup: CraftSetup) -> None:
+    domains = KIND_DOMAINS[setup.kind]
     if base.domain not in domains:
         raise GameDataError(
-            f"method {label!r} is not modelled for {base.name} (domain {base.domain!r}); "
-            f"{model.name} items are supported for domains: {', '.join(sorted(domains))}"
+            f"method {setup.label!r} is not modelled for {base.name} (domain {base.domain!r}); "
+            f"{setup.kind} items are supported for domains: {', '.join(sorted(domains))}"
         )
 
 
@@ -53,7 +83,7 @@ def _apply_affix_limits(base: BaseItem, setup: CraftSetup) -> CraftSetup:
     """Apply implicit prefix/suffix limits (e.g. Helical Ring) to the rare model."""
     if not (base.prefix_delta or base.suffix_delta):
         return setup
-    if setup.model.name != "rare":
+    if setup.kind == "magic":
         raise GameDataError(
             f"method {setup.label!r} is not modelled for {base.name}: its implicit changes the "
             f"allowed prefixes/suffixes ({base.prefix_delta:+d}/{base.suffix_delta:+d}) and the "
@@ -62,11 +92,12 @@ def _apply_affix_limits(base: BaseItem, setup: CraftSetup) -> CraftSetup:
     max_prefix = max(0, RARE.max_prefix + base.prefix_delta)
     max_suffix = max(0, RARE.max_suffix + base.suffix_delta)
     model = replace(setup.model, max_prefix=max_prefix, max_suffix=max_suffix)
-    warning = (
-        f"{base.name} allows {max_prefix} prefix(es) and {max_suffix} suffix(es) (implicit); "
-        "the 4-6 affix count is assumed unchanged and truncated to the slots that fit, which "
-        "is not confirmed for affix-limited bases"
-    )
+    warning = f"{base.name} allows {max_prefix} prefix(es) and {max_suffix} suffix(es) (implicit)"
+    if setup.kind == "rare":
+        warning += (
+            "; the 4-6 affix count is assumed unchanged and truncated to the slots that fit, "
+            "which is not confirmed for affix-limited bases"
+        )
     return replace(setup, model=model, warnings=(*setup.warnings, warning))
 
 
@@ -125,20 +156,35 @@ def _fossils(data: GameData, base: BaseItem, query: str) -> CraftSetup:
     )
 
 
+def _simple(base: BaseItem, kind: str) -> CraftSetup | None:
+    if kind == "chaos":
+        return CraftSetup(label="chaos", model=RARE)
+    if kind in ("alt", "alteration"):
+        return CraftSetup(label="alt", model=MAGIC, kind="magic")
+    if kind in ("alt_aug", "alt+aug", "altaug"):
+        rules = (ALT_AUG_RULE, AUG_SPENDING_RULE)
+        return CraftSetup(label="alt_aug", model=MAGIC, kind="magic", assumptions=rules)
+    if kind in ("regal", "regal_orb"):
+        jewel = base.domain in JEWEL_DOMAINS
+        rules = (REGAL_RULE, JEWEL_LIMITS) if jewel else (REGAL_RULE,)
+        model = RARE_JEWEL if jewel else RARE
+        return CraftSetup(label="regal", model=model, kind="regal", assumptions=rules)
+    return None
+
+
 def parse_method(data: GameData, base: BaseItem, method: str) -> CraftSetup:
     kind, _, arg = method.strip().partition(":")
     kind = kind.strip().lower()
-    if kind == "chaos" and not arg:
-        setup = CraftSetup(label="chaos", model=RARE)
-    elif kind in ("alt", "alteration") and not arg:
-        setup = CraftSetup(label="alt", model=MAGIC)
+    simple = None if arg else _simple(base, kind)
+    if simple is not None:
+        setup = simple
     elif kind == "essence" and arg.strip():
         setup = _essence(data, base, arg.strip())
     elif kind in ("fossil", "fossils") and arg.strip():
         setup = _fossils(data, base, arg)
     else:
         raise GameDataError(f"unknown method {method!r}; {METHOD_HELP}")
-    _check_domain(base, setup.model, setup.label)
+    _check_domain(base, setup)
     setup = _apply_affix_limits(base, setup)
-    count = RARE_COUNT if setup.model.name == "rare" else MAGIC_COUNT
-    return replace(setup, assumptions=(count, *setup.assumptions))
+    count = {"rare": (RARE_COUNT,), "magic": (MAGIC_COUNT,), "regal": ()}[setup.kind]
+    return replace(setup, assumptions=(*count, *setup.assumptions))

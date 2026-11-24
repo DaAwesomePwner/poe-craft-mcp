@@ -1,0 +1,59 @@
+# Starter recipe from a PRE-3.30 guide (July 2024); odds from the RePoE 3.30.0.4.3 export. NOT verified in game.
+id: convoking-wand-spell-minion-levels
+name: Convoking Wand, +1 spell and +1 minion gem levels (4-fossil spam)
+tags: [fossil, wand, minion, starter]
+status: unverified
+verified_patch: null
+sources:
+  - "https://poe-vault.com/guides/crafting-2-generic-minion-wand"
+requires: []
+budget_div: 25
+base:
+  lookup: { source: ninja, type: BaseType, name: "Convoking Wand", ilvl_min: 84 }
+steps:
+  - action: alchemy
+    materials:
+      # A Chaotic Resonator only works on a rare item: turn the white base rare once.
+      - { source: ninja, category: Currency, name: "Orb of Alchemy", qty: 1 }
+  - action: fossil_spam
+    materials:
+      - { source: ninja, category: Resonator, name: "Prime Chaotic Resonator", qty: 1 }
+      - { source: ninja, category: Fossil, name: "Corroded Fossil", qty: 1 }
+      - { source: ninja, category: Fossil, name: "Jagged Fossil", qty: 1 }
+      - { source: ninja, category: Fossil, name: "Shuddering Fossil", qty: 1 }
+      - { source: ninja, category: Fossil, name: "Metallic Fossil", qty: 1 }
+    repeat_until: "the wand has both +1 to Level of all Spell Skill Gems and +1 to Level of all Minion Skill Gems"
+    p_success: { p_source: user, value: 0.0816 }
+outcomes:
+  - name: "+1 spell +1 minion Convoking Wand"
+    probability: 1
+    # Convoking Wand with +1 to Level of all Spell Skill Gems and +1 to Level of all Minion Skill Gems.
+    trade_url: "https://www.pathofexile.com/trade/search/Covens/H4sIAAAAAAACCo2OzQ6CMBCEX8XsmRgK-MfVh_BgjKmwmI21rW0hEtJ3dwvx5sHsZTM7385M8OrRjVBP4IMMvU-bsYGMhhqMVqQRYgZhtMjC0ejBPEjfVyepW8hmiJnz9HUsckcqoFsO1LKMb6uoobBOwFUUlSjFvszZOkjVY0p9EkcKzmrJy5tCxjqpPMbs549CbIv8sKs2xV9PLjxc17iQbNZRM7f1DcT4ASLZvikFAQAA"
+salvage:
+  # Not used: the fossil step repeats until both mods are on the wand, so there is no failed attempt.
+  lookup: { source: ninja, type: BaseType, name: "Convoking Wand", ilvl_min: 84 }
+minutes: 12
+notes: >-
+  Older guide (PoE Vault, July 2024, written for Sentinel): check that it still works in 3.30
+  before relying on it. What you make: a rare Convoking Wand with two prefixes, +1 to Level of
+  all Spell Skill Gems (mod GlobalSpellGemsLevel1) and +1 to Level of all Minion Skill Gems (mod
+  MinionGemLevel1h1). Only the minion wands (Calling, Convening and Convoking Wand) can roll the
+  minion prefix; this recipe uses Convoking Wand, the highest-level one, as the guide does (the
+  odds and searches here are for Convoking only). Buy a white (normal) Convoking Wand of item
+  level 84+ (84 unlocks the top minion damage tier, a bonus if it appears).
+  Steps. (1) A Chaotic Resonator rerolls a RARE item, like a Chaos Orb, so first use one Orb of
+  Alchemy to make the white wand rare (or buy a rare one instead). (2) Put Corroded, Jagged, Shuddering and Metallic Fossils into a Prime Chaotic Resonator
+  (four sockets) and apply it to the wand. Each use rerolls the whole wand. Repeat with a new
+  resonator and four new fossils until both gem-level prefixes are on the wand; then sell it
+  (the guide goes on to bench-craft a suffix such as the spell trigger; that finishing is not
+  modelled, and the sale search does not require it).
+  How the odds are derived: mod_odds with the four fossils on Convoking Wand at ilvl 84 gives
+  P(spell level) = 0.1102, P(minion level) = 0.3211 and P(at least one) = 0.3497 (Monte Carlo,
+  20000 samples, same seed). Both together = 0.1102 + 0.3211 - 0.3497 = 0.0816 per attempt
+  (about 12.3 attempts), recorded as a user number because mod_odds reports "at least one of the
+  targets", not "all of them". The guide's own estimate is "around 10-12 tries", which agrees.
+  Minutes (estimate, not from the guide): about 12 attempts at 40 s each to socket four fossils
+  and apply the resonator (8 min) plus buying the base, the Alchemy and listing (4 min). Fossils come from
+  Delve. Verify in game: the fossil combination is still allowed together, the two mods appear
+  as prefixes, and the sale search shows wands like yours (suffixes and minion damage change the
+  price a lot).

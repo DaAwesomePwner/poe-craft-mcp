@@ -52,7 +52,8 @@ def fetch_body(prices: list[tuple[float, str]]) -> httpx.Response:
             "listing": {
                 "indexed": "2026-11-23T00:00:00Z",
                 "price": {"amount": amount, "currency": currency},
-                "account": {"online": {"league": "Covens"}},
+                "fee": 2800,
+                "account": {"online": None},
             },
             "item": {},
         }
@@ -111,13 +112,13 @@ async def test_prices_are_converted_through_rates(
     assert price.sources[2]["url"].startswith(f"{TRADE}/trade/search/Covens/")
 
 
-async def test_query_json_posts_online_price_sorted_search(
+async def test_query_json_posts_instant_buyout_price_sorted_search(
     ctx: AppContext, api: NinjaApi, trade: TradeClient
 ) -> None:
     search, _ = mock_trade(api)
     await price_outcome(ctx, query_json={"query": {"type": "Simple Robe"}}, sample=10)
     body = json.loads(search.calls.last.request.content)
-    assert body["query"]["status"] == {"option": "online"} and body["sort"] == {"price": "asc"}
+    assert body["query"]["status"] == {"option": "securable"} and body["sort"] == {"price": "asc"}
 
 
 async def test_stale_listings_propagate(
@@ -195,24 +196,50 @@ def test_parse_indexed() -> None:
     assert parse_indexed("garbage") is None and parse_indexed(None) is None
 
 
-SECURABLE = {"query": {"type": "Simple Robe", "status": {"option": "securable"}}}
+def with_status(option: str) -> dict[str, Any]:
+    return {"query": {"type": "Simple Robe", "status": {"option": option}}}
 
 
-@pytest.mark.parametrize(
-    "target",
-    [
-        {"query_json": SECURABLE},
-        {"trade_url": f"{TRADE}/trade/search/Settlers/{blob(json.dumps(SECURABLE).encode())}"},
-    ],
-)
-async def test_instant_buyout_status_in_the_query_is_kept(
-    ctx: AppContext, api: NinjaApi, trade: TradeClient, target: dict[str, Any]
+def saved(body: dict[str, Any], kind: str = "search") -> str:
+    return f"{TRADE}/trade/{kind}/Settlers/{blob(json.dumps(body).encode())}"
+
+
+@pytest.mark.parametrize("option", ["online", "any", "securable"])
+@pytest.mark.parametrize("as_url", [False, True])
+async def test_any_query_status_is_priced_from_instant_buyout_only(
+    ctx: AppContext, api: NinjaApi, trade: TradeClient, option: str, as_url: bool
 ) -> None:
     search, _ = mock_trade(api)
+    body = with_status(option)
+    target = {"trade_url": saved(body)} if as_url else {"query_json": body}
     price = await price_outcome(ctx, sample=10, **target)
-    body = json.loads(search.calls.last.request.content)
-    assert body["query"]["status"] == {"option": "securable"}
+    sent = json.loads(search.calls.last.request.content)
+    assert sent["query"]["status"] == {"option": "securable"}
     assert price.sources[-1]["instant_buyout"] is True
+    assert price.dropped_not_instant_buyout == 0
+
+
+async def test_exchange_url_is_refused_for_pricing(
+    ctx: AppContext, api: NinjaApi, trade: TradeClient
+) -> None:
+    search, fetch = mock_trade(api)
+    exchange = api.router.post(url__startswith=f"{TRADE}/api/trade/exchange/").respond(500)
+    url = saved({"query": {"want": ["divine"], "have": ["chaos"]}}, kind="exchange")
+    with pytest.raises(ValueError, match="exchange listings are whisper-based; use an item search"):
+        await price_outcome(ctx, trade_url=url)
+    assert (search.call_count, fetch.call_count, exchange.call_count) == (0, 0, 0)
+
+
+async def test_whisper_listings_are_dropped_and_reported(
+    ctx: AppContext, api: NinjaApi, trade: TradeClient
+) -> None:
+    response = fetch_body([(1, "chaos"), (5, "chaos"), (6, "chaos"), (7, "chaos")])
+    body = json.loads(response.content)
+    del body["result"][0]["listing"]["fee"]  # a whisper-only 1c listing
+    mock_trade(api, fetch=httpx.Response(200, json=body))
+    price = await price_outcome(ctx, query_json={"query": {"type": "Simple Robe"}}, sample=4)
+    assert (price.raw_count, price.dropped_not_instant_buyout) == (3, 1)
+    assert price.p10 is not None and price.p10 >= 5.0  # the 1c whisper price is not used
 
 
 async def test_rates_and_divine_come_from_one_currency_snapshot(

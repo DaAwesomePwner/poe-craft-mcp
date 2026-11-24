@@ -17,9 +17,13 @@ reversed, rewrite its line and note what it replaces.
 
 ## Recipes
 
-- The repo ships only 3 unverified structural example recipes; real crafts are added by the user after checking them in game. Why: 3.30 crafts can't be verified by agents. (2026-11-23, v1 build, PR #2)
+- The repo ships 3 unverified structural example recipes plus unverified starter crafts drafted by agents from public guides (real trade searches, odds from the game data, listed in docs/starter-recipes.md); only the user promotes a recipe to verified, after checking it in game. Why: the owner wants real crafts to evaluate out of the box, and 3.30 crafts can't be verified by agents. (2026-11-24, starter recipes, R1) Replaces: the repo ships only 3 unverified structural example recipes; real crafts are added by the user after checking them in game.
 - `fixed_chaos` and `use_salvage` outcomes are failure values only; a successful sale must be priced by `trade_url`, and a recipe without one (or with its sale price overridden) is evaluated but never ranked. Why: never rank a craft on an asserted sale price with no live listings behind it. (2026-11-24, v1 build, phase 3)
 - A recipe step repeats only when it has `repeat_until`; `p_success` without it is ignored with a warning and the step is paid once. Why: a one-shot step must not be costed as a repeated one. (2026-11-24, v1 build, phase 3)
+
+## Trade pricing
+
+- Trade prices and liquidity use only instant-buyout (asynchronous trade) listings; whisper listings are never used. Why: whisper prices are unreliable (anyone can list and ignore whispers) and whisper trades are never worth the time. (2026-11-24, starter recipes goal, P1)
 
 ## Profit engine
 
