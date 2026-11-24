@@ -13,6 +13,9 @@ from poe_craft_mcp.gamedata.models import (
 )
 
 AFFIX_LIMIT_STATS = ("local_maximum_prefixes_allowed_+", "local_maximum_suffixes_allowed_+")
+ATTRIBUTE_ENCHANT_TAGS = frozenset(
+    {"affliction_strength", "affliction_dexterity", "affliction_intelligence"}
+)
 
 
 def tag_weights(raw: list[dict[str, Any]]) -> TagWeights:
@@ -32,7 +35,20 @@ def parse_mod(mod_id: str, raw: dict[str, Any]) -> ModDef:
         is_essence_only=bool(raw.get("is_essence_only", False)),
         text=str(raw.get("text") or raw.get("name") or mod_id),
         adds_tags=frozenset(raw.get("adds_tags", ())),
+        stat_ids=tuple(str(stat["id"]) for stat in raw.get("stats", ())),
     )
+
+
+def parse_trade_stats(raw: list[dict[str, Any]]) -> dict[str, str]:
+    """stat_translations.json: stat id -> explicit trade stat id, for translations of exactly
+    one stat with exactly one explicit trade stat (others are ambiguous and left out)."""
+    out: dict[str, str] = {}
+    for entry in raw:
+        ids = entry.get("ids") or []
+        explicit = [t["id"] for t in entry.get("trade_stats") or [] if t.get("type") == "explicit"]
+        if len(ids) == 1 and len(explicit) == 1:
+            out[str(ids[0])] = str(explicit[0])
+    return out
 
 
 def parse_fossil(fossil_id: str, raw: dict[str, Any]) -> Fossil:
@@ -73,23 +89,41 @@ def affix_deltas(implicits: list[str], raw_mods: dict[str, Any]) -> tuple[int, i
     return deltas[prefix_stat], deltas[suffix_stat]
 
 
+def enchant_trade_option(position: int, tag: str) -> int | None:
+    """Trade option of a cluster enchant: its 1-based `position` across every
+    cluster_jewels.json passive_skills list in file order (Large, Medium, Small), or None for
+    the attribute enchants (Strength, Dexterity, Intelligence; told apart by tag, not position).
+
+    Evidence: https://www.pathofexile.com/api/trade/data/stats, filter enchant.stat_3948993189
+    ("Added Small Passive Skills grant: #"), has options 1-55 in this order for the RePoE
+    3.30.0.4.3 export, with no option for the three attribute enchants (positions 51-53);
+    checked 2026-11-24."""
+    return None if tag in ATTRIBUTE_ENCHANT_TAGS else position
+
+
 def parse_clusters(raw: dict[str, Any]) -> dict[str, ClusterJewel]:
     """cluster_jewels.json: per base, the passive-count range and the enchants it can drop with."""
-    return {
-        base_id: ClusterJewel(
+    clusters: dict[str, ClusterJewel] = {}
+    position = 0
+    for base_id, entry in raw.items():
+        enchants = []
+        for skill in entry["passive_skills"]:
+            position += 1
+            tag = str(skill["tag"])
+            enchants.append(
+                ClusterEnchant(
+                    id=str(skill["id"]),
+                    name=str(skill["name"]),
+                    tag=tag,
+                    stat_text=tuple(str(t) for t in skill.get("stat_text", ())),
+                    trade_option=enchant_trade_option(position, tag),
+                )
+            )
+        clusters[base_id] = ClusterJewel(
             base_id=base_id,
             name=str(entry["name"]),
             min_skills=int(entry["min_skills"]),
             max_skills=int(entry["max_skills"]),
-            enchants=tuple(
-                ClusterEnchant(
-                    id=str(skill["id"]),
-                    name=str(skill["name"]),
-                    tag=str(skill["tag"]),
-                    stat_text=tuple(str(t) for t in skill.get("stat_text", ())),
-                )
-                for skill in entry["passive_skills"]
-            ),
+            enchants=tuple(enchants),
         )
-        for base_id, entry in raw.items()
-    }
+    return clusters

@@ -31,6 +31,8 @@ class ModDef:
     text: str
     adds_tags: frozenset[str] = frozenset()
     """Tags the mod adds to the item once rolled (e.g. has_affliction_notable)."""
+    stat_ids: tuple[str, ...] = ()
+    """The mod's stat ids (mods.json stats[].id), in export order."""
 
 
 @dataclass(frozen=True)
@@ -76,6 +78,9 @@ class ClusterEnchant:
     tag: str
     """Tag the enchant gives the jewel; notables' spawn_weights reference it."""
     stat_text: tuple[str, ...]
+    trade_option: int | None = None
+    """Option of the trade filter enchant.stat_3948993189 for this enchant, or None (see
+    records.enchant_trade_option)."""
 
 
 @dataclass(frozen=True)
@@ -98,6 +103,9 @@ class GameData:
     source_url: str
     clusters: dict[str, ClusterJewel] = field(default_factory=dict)
     """Cluster jewel bases by base id; empty when cluster_jewels.json is not in the export."""
+    trade_stats: dict[str, str] = field(default_factory=dict)
+    """Stat id -> explicit trade stat id (e.g. 'explicit.stat_2337273077'); empty when
+    stat_translations.json is not in the export."""
 
     @property
     def stale_warning(self) -> str | None:
@@ -114,6 +122,25 @@ class GameData:
                 f"generation; weights may be wrong — {FETCH_HINT}"
             )
         return None
+
+
+def trade_stat_for(data: GameData, mod: ModDef) -> str:
+    """The pathofexile.com trade stat id that searches for `mod` as an explicit affix.
+
+    Only mods with exactly one stat whose translation has one explicit trade stat qualify."""
+    if not data.trade_stats:
+        raise GameDataError(
+            f"no trade stat ids for {mod.id}: stat_translations.json is not in the export; "
+            f"{FETCH_HINT}"
+        )
+    trade = data.trade_stats.get(mod.stat_ids[0]) if len(mod.stat_ids) == 1 else None
+    if trade is None:
+        stats = ", ".join(mod.stat_ids) or "none"
+        raise GameDataError(
+            f"{mod.id} has no single explicit trade stat (stats: {stats}); stat_translations "
+            "maps only one-stat lines with exactly one explicit trade id"
+        )
+    return trade
 
 
 def parse_patch(version: str | None) -> tuple[int, int] | None:
