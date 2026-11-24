@@ -22,6 +22,7 @@ from poe_craft_mcp.gamedata.publish import lock_path
 from poe_craft_mcp.gamedata.records import (
     affix_deltas,
     parse_clusters,
+    parse_explicit_trade_ids,
     parse_fossil,
     parse_mod,
     parse_trade_stats,
@@ -161,6 +162,7 @@ def _parse(directory: Path) -> GameData:
         source_url=manifest.get("source", EXPORT_BASE_URL),
         clusters=parse_clusters(raw_clusters) if raw_clusters else {},
         trade_stats=parse_trade_stats(raw_translations) if raw_translations else {},
+        explicit_trade_ids=parse_explicit_trade_ids(raw_translations) if raw_translations else {},
     )
 
 

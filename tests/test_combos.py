@@ -7,6 +7,7 @@ hand in each test.
 
 from __future__ import annotations
 
+import math
 import shutil
 from dataclasses import replace
 from fractions import Fraction
@@ -25,6 +26,7 @@ from poe_craft_mcp.gamedata.models import (
     GameData,
     GameDataError,
     ModDef,
+    all_explicit_trade_ids,
     trade_stat_for,
 )
 from poe_craft_mcp.gamedata.records import parse_clusters
@@ -67,8 +69,29 @@ def test_trade_stats_optional(tmp_path: Path) -> None:
     (tmp_path / "gd" / "stat_translations.json").unlink()
     data = load_gamedata(tmp_path / "gd")
     assert data.trade_stats == {}
-    with pytest.raises(GameDataError, match="stat_translations.json is not in the export.*fetch"):
+    message = "stat_translations.json missing or has none for this mod.*fetch"
+    with pytest.raises(GameDataError, match=message) as missing:
         trade_stat_for(data, data.mods[WP])
+    assert "is not in the export" not in str(missing.value)
+
+
+def test_empty_trade_stat_map_does_not_claim_the_file_is_missing(data: GameData) -> None:
+    emptied = replace(data, trade_stats={})
+    with pytest.raises(GameDataError, match="missing or has none for this mod") as raised:
+        trade_stat_for(emptied, emptied.mods[WP])
+    assert "is not in the export" not in str(raised.value)
+
+
+def test_all_explicit_trade_ids_include_ambiguous_ones(data: GameData) -> None:
+    eye = replace(data.mods[WP], stat_ids=("local_affliction_notable_evil_eye",))
+    assert all_explicit_trade_ids(data, eye) == (
+        "explicit.stat_156080652",
+        "explicit.stat_4291066912",
+    )
+    assert all_explicit_trade_ids(data, data.mods[WP]) == ("explicit.stat_1616734644",)
+    assert all_explicit_trade_ids(data, replace(eye, stat_ids=("nope",))) == ()
+    only_single = replace(data, explicit_trade_ids={})  # e.g. GameData built by hand
+    assert all_explicit_trade_ids(only_single, data.mods[WP]) == ("explicit.stat_1616734644",)
 
 
 def test_trade_option_numbering(data: GameData) -> None:
@@ -333,6 +356,21 @@ def test_impossible_pairs(
 ) -> None:
     with pytest.raises(GameDataError, match=message):
         combo_odds(data, base, 84, enchant, None, sellable)
+
+
+@pytest.mark.parametrize("miss", [math.inf, -math.inf, math.nan, True, "5"])
+def test_miss_value_must_be_finite(miss: object) -> None:
+    data = synthetic("Medium", MEDIUM)
+    with pytest.raises(GameDataError, match="miss_value must be a finite chaos value"):
+        combo_odds(
+            data,
+            "Medium Test Jewel",
+            84,
+            "Synthetic",
+            4,
+            {pair("N1", "N2"): 100},
+            miss,  # type: ignore[arg-type]
+        )
 
 
 def test_fixture_combo_odds_sum_to_one(data: GameData) -> None:

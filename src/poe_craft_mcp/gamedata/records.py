@@ -51,6 +51,20 @@ def parse_trade_stats(raw: list[dict[str, Any]]) -> dict[str, str]:
     return out
 
 
+def parse_explicit_trade_ids(raw: list[dict[str, Any]]) -> dict[str, tuple[str, ...]]:
+    """stat_translations.json: stat id -> every explicit trade stat id of the translations
+    that include it, ambiguous ones too (e.g. Evil Eye's two ids, shared with another
+    notable). For excluding a mod from a search, never for searching for it."""
+    found: dict[str, set[str]] = {}
+    for entry in raw:
+        explicit = {
+            str(t["id"]) for t in entry.get("trade_stats") or [] if t.get("type") == "explicit"
+        }
+        for stat in entry.get("ids") or []:
+            found.setdefault(str(stat), set()).update(explicit)
+    return {stat: tuple(sorted(ids)) for stat, ids in found.items() if ids}
+
+
 def parse_fossil(fossil_id: str, raw: dict[str, Any]) -> Fossil:
     unmodelled = []
     if raw.get("rolls_lucky"):

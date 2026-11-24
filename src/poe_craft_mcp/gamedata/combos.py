@@ -83,6 +83,10 @@ def best_pair(notables: frozenset[str], values: Mapping[Pair, float]) -> Pair | 
     return max(held, key=lambda p: values[p]) if held else None
 
 
+def _finite_number(value: object) -> bool:
+    return isinstance(value, int | float) and not isinstance(value, bool) and isfinite(value)
+
+
 def _check_sellable(
     data: GameData, info: ClusterNotables, sellable: Mapping[Pair, float]
 ) -> dict[Pair, float]:
@@ -106,7 +110,7 @@ def _check_sellable(
             a, b = (data.mods[m] for m in sorted(pair))
             why = pair_problem(info.item, info.ilvl, a, b) or "not a legal pair"
             raise GameDataError(f"sellable pair {sorted(pair)} cannot be on one rare: {why}")
-        if isinstance(value, bool) or not isinstance(value, int | float) or not isfinite(value):
+        if not _finite_number(value):
             raise GameDataError(f"sellable pair {sorted(pair)} needs a finite chaos value")
         values[pair] = float(value)
     return values
@@ -124,6 +128,8 @@ def combo_odds(
     """Exact odds and expected value of one anchor-cycle + Regal attempt (see module doc)."""
     info = cluster_notables(data, base, ilvl, enchant, passives)
     values = _check_sellable(data, info, sellable)
+    if miss_value is not None and not _finite_number(miss_value):
+        raise GameDataError("miss_value must be a finite chaos value")
     anchors = frozenset().union(*values)
     candidates = [candidate(e, anchors) for e in info.pool]
     raw_states = magic_states(candidates)
