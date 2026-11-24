@@ -1,0 +1,191 @@
+"""Which cluster enchant of one size has the most notable pairs worth at least T.
+
+For every enchant: the `cluster_combos` guards, then discovery only (two searches, cached for
+trade_cache_min). Candidates get a PROVISIONAL value from their discovery listings at or
+above T, and the exact odds engine gives the chance per attempt of landing any provisional
+sellable pair. Nothing is confirmed: `cluster_combos` confirms one enchant with exact pair
+searches and prices the whole craft. Enchants with fresh cached discovery go first (no
+requests), then live discovery until max_seconds or a rate limit; the rest stay pending.
+Only instant-buyout listings are used, never whisper listings.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import math
+from dataclasses import dataclass
+from typing import Any
+
+from poe_craft_mcp.clients.ninja import rates_from
+from poe_craft_mcp.context import AppContext
+from poe_craft_mcp.engine.types import Source
+from poe_craft_mcp.gamedata.cluster import CLUSTER_DOMAIN
+from poe_craft_mcp.gamedata.combo_pairs import SMALL_TAG
+from poe_craft_mcp.gamedata.lookup import resolve_base
+from poe_craft_mcp.gamedata.models import FETCH_HINT, ClusterEnchant, GameData, GameDataError
+from poe_craft_mcp.services.cluster_combos import _rates
+from poe_craft_mcp.services.combo_report import unique, unique_sources
+from poe_craft_mcp.services.combo_request import ComboRequest
+from poe_craft_mcp.services.combo_survey_enchant import (
+    Plan,
+    cached_fresh,
+    evaluate,
+    plan_enchant,
+    run_discovery,
+    select_enchants,
+    skip_row,
+)
+from poe_craft_mcp.services.combo_survey_report import (
+    SURVEY_ASSUMPTIONS,
+    continue_note,
+    rank,
+    rate_warnings,
+    stop_reason,
+    truncation_report,
+)
+from poe_craft_mcp.services.trade_pricing import PricingUnavailable
+
+__all__ = ["SurveyRequest", "cluster_combo_survey"]
+
+
+@dataclass(frozen=True)
+class SurveyRequest:
+    base: str
+    passives: int
+    ilvl: int
+    min_value_div: float = 1.0
+    min_listings: int = 3
+    discovery_sample: int = 100
+    max_seconds: float = 90.0
+    enchants: tuple[str, ...] | None = None
+    limit: int = 10
+
+    def check(self) -> None:
+        """Raise ValueError for an argument out of range (the `cluster_combos` rules)."""
+        ComboRequest(
+            base=self.base,
+            enchant="",
+            passives=self.passives,
+            ilvl=self.ilvl,
+            min_value_div=self.min_value_div,
+            min_listings=self.min_listings,
+            discovery_sample=self.discovery_sample,
+            max_seconds=self.max_seconds,
+        ).check()
+        if self.limit < 1:
+            raise ValueError(f"limit must be >= 1 (got {self.limit})")
+        if self.enchants is not None and not self.enchants:
+            raise ValueError("enchants must name at least one enchant, or be omitted for all")
+
+
+def _plans(
+    data: GameData, req: SurveyRequest, enchants: list[ClusterEnchant]
+) -> tuple[list[Plan], list[dict[str, str]], list[str]]:
+    plans, skipped, warnings = [], [], []
+    for enchant in enchants:
+        got = plan_enchant(data, req, enchant)
+        if isinstance(got, str):
+            skipped.append(skip_row(enchant, got))
+            continue
+        plans.append(got)
+        warnings += got.info.warnings
+        if got.split.unpriceable_pairs:
+            n = len(got.split.unpriceable_pairs)
+            warnings.append(
+                f"{enchant.name}: {n} legal pair(s) hold a notable without its own trade id "
+                "and are left out of the survey"
+            )
+    return plans, skipped, warnings
+
+
+async def cluster_combo_survey(
+    ctx: AppContext, data: GameData, req: SurveyRequest
+) -> tuple[dict[str, Any], list[Source]]:
+    """(payload, envelope sources). Raises ValueError or GameDataError for bad inputs and
+    PricingUnavailable when the divine rate is unavailable."""
+    req.check()
+    item, warnings = resolve_base(data, req.base)
+    if item.domain != CLUSTER_DOMAIN:
+        raise GameDataError(f"{item.name} is not a cluster jewel; combos need a cluster jewel")
+    out: dict[str, Any] = {"base": item.name, "ilvl": req.ilvl, "passives": req.passives}
+    assumptions = list(SURVEY_ASSUMPTIONS)
+    if SMALL_TAG in item.tags:
+        out.update(ranking=[], note="a Small Cluster Jewel holds one notable: no pairs to survey")
+        return {**out, "assumptions": assumptions, "warnings": warnings}, []
+    cluster = data.clusters.get(item.id)
+    if cluster is None:
+        raise GameDataError(f"cluster_jewels.json has no {item.name} — {FETCH_HINT}")
+    if not cluster.min_skills <= req.passives <= cluster.max_skills:
+        raise ValueError(
+            f"{item.name} adds {cluster.min_skills}-{cluster.max_skills} passive skills "
+            f"(got passives={req.passives})"
+        )
+    selected, skipped = select_enchants(cluster, req.enchants)
+    plans, more_skipped, plan_warnings = await asyncio.to_thread(_plans, data, req, selected)
+    skipped += more_skipped
+    warnings += plan_warnings
+    out["skipped"] = skipped
+    if not plans:
+        out.update(ranking=[], pending=[], note="no enchant has a priceable notable pair")
+        return {**out, "assumptions": assumptions, "warnings": unique(warnings)}, []
+
+    league, currency, per_divine = await _rates(ctx)
+    rates = rates_from(currency.rows)
+    warnings += rate_warnings(currency, league)
+    threshold = req.min_value_div * per_divine
+    undercut = ctx.config.undercut_pct / 100
+    out.update(
+        league=league,
+        threshold={"divine": req.min_value_div, "chaos": round(threshold, 2)},
+        chaos_per_divine=per_divine,
+        undercut_pct=ctx.config.undercut_pct,
+        min_listings=req.min_listings,
+    )
+
+    clock = ctx.cache.clock
+    deadline = clock() + req.max_seconds
+    fresh = [await cached_fresh(ctx, league, p, threshold, req.discovery_sample) for p in plans]
+    queue = [p for p, f in zip(plans, fresh, strict=True) if f]
+    queue += [p for p, f in zip(plans, fresh, strict=True) if not f]
+    n_cached = sum(fresh)
+    rows, discs, sources = [], [], [currency.sources()]
+    stopped, retry_after, pending = None, None, []
+    for i, plan in enumerate(queue):
+        if i >= n_cached and clock() >= deadline:
+            stopped, pending = "max_seconds time budget spent", queue[i:]
+            break
+        try:
+            disc = await run_discovery(ctx, league, plan, req, threshold, rates, deadline)
+        except PricingUnavailable as exc:
+            if exc.retry_after is None:
+                skipped.append(skip_row(plan.enchant, f"discovery failed: {exc.reason}"))
+                continue
+            retry_after = math.ceil(exc.retry_after)
+            stopped, pending = stop_reason(exc.retry_after, clock(), deadline), queue[i:]
+            break
+        if any(src.get("stale") for src in disc.sources):  # never used: stays pending
+            stopped = "the trade site served only a stale cached copy (rate limited or failing)"
+            pending = queue[i:]
+            break
+        rows.append(await evaluate(data, req, plan, disc, threshold, undercut, per_divine))
+        discs.append((plan, disc))
+        sources.append(disc.sources)
+
+    ranking = rank(rows, [p.enchant.id for p in plans])
+    out.update(
+        ranking=ranking[: req.limit],
+        ranked_count=len(ranking),
+        pending=[{"enchant": p.enchant.name, "enchant_id": p.enchant.id} for p in pending],
+        stopped=stopped,
+        retry_after_seconds=retry_after,
+        discovery=truncation_report(discs, sum(r["from_cache"] for r in rows)),
+        next_step="confirm the top enchants with cluster_combos (exact pair searches, miss "
+        "value, base and orb costs, profit per hour) before crafting",
+    )
+    if len(ranking) > req.limit:
+        warnings.append(f"ranking capped at limit={req.limit} of {len(ranking)} enchants")
+    if pending:
+        out["note"] = continue_note(ctx.config.trade_cache_min)
+        warnings.append(f"survey stopped early: {stopped}; {len(pending)} enchant(s) pending")
+    payload = {**out, "assumptions": assumptions, "warnings": unique(warnings)}
+    return payload, unique_sources(sources)

@@ -809,6 +809,11 @@ async def test_ambiguous_ids_join_the_exclusion(
         "filters": [{"id": i} for i in (T_LT, *EYE)],  # ES, FL and WP are the anchors
     }
     assert payload["notables"]["priceable"] == 4
+    # Brush has explicit ids (shared ones), so the unidentifiable-notable guard stays quiet.
+    assert "note" not in payload and payload["economics"] is not None
+    assert not any(
+        "cannot rule out" in w or "no explicit trade id" in w for w in payload["warnings"]
+    )
 
 
 async def test_miss_with_listings_that_vanish_is_unknown(
@@ -859,6 +864,7 @@ async def test_unidentifiable_notable_blocks_confirmation(
     scenario(fake)
     payload, sources = await cluster_combos(ctx, blind, request())
     assert {fake.key(b) for b in fake.searches} == {"below", "above"}
+    assert len(fake.searches) == 2  # discovery only: no pair, miss or base search
     assert payload["sellable_pairs"] == [] and payload["economics"] is None
     assert payload["note"].startswith("cannot rule out jewels carrying Brush with Death")
     assert "refresh the game data export" in payload["note"]
