@@ -186,8 +186,12 @@ async def price_outcome(
     except NotCached as exc:
         raise QuoteNotCached(f"trade site: {exc}") from None
     except RateLimited as exc:
-        ours = exc.cause == "deadline" and wait_until < own_limit
-        ours = ours and ctx.cache.clock() + exc.retry_after <= own_limit
+        # A refused wait is ours only if it would have fit the limiter's own cap; a request
+        # cut off in flight is ours whatever the next request would wait.
+        fits = ctx.cache.clock() + exc.retry_after <= own_limit
+        ours = (exc.cause == "cancelled" or (exc.cause == "deadline" and fits)) and (
+            wait_until < own_limit
+        )
         cause = "deadline" if ours else None
         raise PricingUnavailable(str(exc), exc.retry_after, cause) from None
     except TradeError as exc:

@@ -369,3 +369,13 @@ async def test_rate_limited_cause_separates_server_from_deadline(
         await limiter.run("search", reply(), deadline=clock() + 1)
     assert (server.value.cause, refused.value.cause) == ("server", "deadline")
     assert RateLimited(1.0, "x").cause == "server"
+
+
+async def test_cut_off_send_has_its_own_cause(limiter: RateLimiter, clock: FakeClock) -> None:
+    async def hang() -> httpx.Response:
+        await asyncio.sleep(30)
+        return httpx.Response(200)
+
+    with pytest.raises(RateLimited) as cut_off:
+        await limiter.run("search", hang, deadline=clock() + 0.05)
+    assert cut_off.value.cause == "cancelled"

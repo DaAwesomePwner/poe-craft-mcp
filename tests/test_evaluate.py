@@ -8,6 +8,7 @@ Imperial Bow ilvl >= 85 2.2c, Orb of Alteration 0.2118c, every trade outcome p25
 
 from __future__ import annotations
 
+import asyncio
 import math
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -400,6 +401,24 @@ async def test_stale_rates_do_not_age_chaos_only_listings(
     bow = by_name(ev)["crafted bow"]
     assert (bow.stale, bow.age_seconds) == (False, 0)
     assert not any("crafted bow" in w for w in ev.warnings)
+
+
+async def test_in_flight_cancellation_is_time_budget_whatever_the_next_wait(
+    ctx: AppContext, api: NinjaApi, trade: TradeClient, clock: FakeClock
+) -> None:
+    sent: list[httpx.Request] = []
+
+    async def last_slot(request: httpx.Request) -> httpx.Response:
+        sent.append(request)
+        trade.limiter.paused_until = clock() + 90  # the next request would wait past the cap
+        await asyncio.sleep(30)  # the response would arrive after the ranking deadline
+        return recorded("search")
+
+    api.router.post(f"{TRADE}/api/trade/search/Covens").mock(side_effect=last_slot)
+    pricer = Pricer(ctx, deadline=clock() + 0.05, clock=clock)
+    with pytest.raises(TimeBudgetSpent):
+        await pricer.trade("outcome", "x", SAVED_URL)
+    assert len(sent) == 1
 
 
 async def test_server_429_just_before_the_budget_is_a_price_error(
