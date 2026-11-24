@@ -19,6 +19,7 @@ from test_ninja import NinjaApi, api, ctx, load
 from test_trade import SAVED_URL, recorded
 from test_trade_pricing import TRADE, fetch_body, mock_trade, trade
 
+from poe_craft_mcp.clients.ninja import get_ninja
 from poe_craft_mcp.clients.trade import TradeClient
 from poe_craft_mcp.context import AppContext
 from poe_craft_mcp.engine.rank import rank
@@ -431,3 +432,30 @@ async def test_server_429_just_before_the_budget_is_a_price_error(
     priced = await pricer.trade("outcome", "x", SAVED_URL)
     assert priced.error is not None and priced.error.startswith("price unavailable")
     assert "HTTP 429" in priced.error and search.call_count == 1
+
+
+async def test_salvage_lookup_uses_its_poe_ninja_type(
+    ctx: AppContext, api: NinjaApi, trade: TradeClient, store: RecipeStore
+) -> None:
+    mock_trade(api)
+    recipe = store.get("life-plate")
+    assert recipe is not None
+    lookup = {"source": "ninja", "type": "Currency", "name": "Divine Orb"}
+    divine = recipe.model_validate({**recipe.to_document(), "salvage": {"lookup": lookup}})
+    ev = await evaluate_recipe(ctx, divine, Pricer(ctx), 0.05)
+    quote = await get_ninja(ctx).price("Currency", "Divine Orb")
+    assert quote is not None and quote["chaos"] > 1
+    salvage = by_name(ev)["salvage"]
+    assert salvage.status == "ok" and salvage.chaos == pytest.approx(quote["chaos"])
+
+
+async def test_salvage_basetype_lookup_keeps_its_filters_in_any_case(
+    ctx: AppContext, api: NinjaApi, trade: TradeClient, store: RecipeStore
+) -> None:
+    mock_trade(api)
+    recipe = store.get("life-plate")
+    assert recipe is not None
+    lookup = {"source": "ninja", "type": "basetype", "name": "Stygian Vise", "ilvl_min": 82}
+    vise = recipe.model_validate({**recipe.to_document(), "salvage": {"lookup": lookup}})
+    ev = await evaluate_recipe(ctx, vise, Pricer(ctx), 0.05)
+    assert by_name(ev)["salvage"].chaos == 92.4  # cheapest ilvl >= 82 row, as find_base picks
