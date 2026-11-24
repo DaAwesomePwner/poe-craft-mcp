@@ -6,6 +6,7 @@ import logging
 import sys
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
+from typing import Any
 
 LOG_FORMAT = "%(asctime)s %(levelname)s %(name)s: %(message)s"
 MASK = "***"
@@ -15,8 +16,13 @@ _secrets: set[str] = set()
 
 
 def register_secret(value: str | None) -> None:
-    """Mask `value` in every log line from now on. Empty values are ignored."""
+    """Mask `value` in every log record created from now on, whatever handler emits it.
+
+    Masking happens in a process-wide LogRecord factory (installed on first use), so it
+    also covers handlers on child loggers and handlers added later. Empty values are ignored.
+    """
     if value:
+        install_masking()
         _secrets.add(value)
 
 
@@ -32,20 +38,44 @@ def mask_secrets(text: str) -> str:
     return text
 
 
+def mask_record(record: logging.LogRecord) -> None:
+    """Rewrite a record's message, exception text and stack so no registered secret survives."""
+    if not _secrets:
+        return
+    try:
+        message = record.getMessage()
+    except Exception:  # malformed %-args: keep the raw parts so nothing is lost
+        message = f"{record.msg} {record.args!r}"
+    record.msg = mask_secrets(message)
+    record.args = None
+    if record.exc_info and not record.exc_text:
+        record.exc_text = logging.Formatter().formatException(record.exc_info)
+    if record.exc_text:
+        record.exc_text = mask_secrets(record.exc_text)
+    if record.stack_info:
+        record.stack_info = mask_secrets(record.stack_info)
+
+
+def install_masking() -> None:
+    """Wrap the current LogRecord factory so every new record is masked. Idempotent."""
+    base = logging.getLogRecordFactory()
+    if getattr(base, "_poe_craft_masking", False):
+        return
+
+    def factory(*args: Any, **kwargs: Any) -> logging.LogRecord:
+        record = base(*args, **kwargs)
+        mask_record(record)
+        return record
+
+    factory._poe_craft_masking = True  # type: ignore[attr-defined]
+    logging.setLogRecordFactory(factory)
+
+
 class SecretMaskingFilter(logging.Filter):
-    """Rewrites a record's message and exception text so no registered secret survives."""
+    """Handler-level safety net for records built outside the factory (e.g. makeLogRecord)."""
 
     def filter(self, record: logging.LogRecord) -> bool:
-        if not _secrets:
-            return True
-        record.msg = mask_secrets(record.getMessage())
-        record.args = None
-        if record.exc_info and not record.exc_text:
-            record.exc_text = logging.Formatter().formatException(record.exc_info)
-        if record.exc_text:
-            record.exc_text = mask_secrets(record.exc_text)
-        if record.stack_info:
-            record.stack_info = mask_secrets(record.stack_info)
+        mask_record(record)
         return True
 
 
@@ -66,6 +96,7 @@ def setup_logging(logs_dir: Path, level: str = "INFO") -> None:
 
     Calling it again replaces the handlers it added earlier and leaves others alone.
     """
+    install_masking()
     root = logging.getLogger()
     for handler in [h for h in root.handlers if h.get_name() == _HANDLER_TAG]:
         root.removeHandler(handler)
@@ -79,7 +110,8 @@ def setup_logging(logs_dir: Path, level: str = "INFO") -> None:
 
 
 def add_file_log(logger_name: str, path: Path) -> logging.Logger:
-    """Also write `logger_name` to its own rotating file (e.g. `ratelimit.log`)."""
+    """Also write `logger_name` to its own rotating file (e.g. `ratelimit.log`), secret-masked."""
+    install_masking()
     logger = logging.getLogger(logger_name)
     target = str(path.resolve())
     if not any(getattr(h, "baseFilename", None) == target for h in logger.handlers):

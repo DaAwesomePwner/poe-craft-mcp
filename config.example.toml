@@ -9,7 +9,7 @@ league = "auto"
 # Defaults to the project repository URL when unset.
 # contact = "you@example.com"
 
-# Never refresh a poe.ninja dataset more often than this (minutes, 5-1440).
+# Never refresh a poe.ninja dataset more often than this (minutes, 15-1440).
 ninja_min_interval_min = 15
 
 # How long a trade search result stays cached (minutes, 1-1440).

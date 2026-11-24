@@ -1,7 +1,8 @@
 """SQLite store for raw HTTP responses (with ETags) and price history snapshots.
 
 All public methods are async; the blocking sqlite3 work runs in `asyncio.to_thread`,
-one short-lived connection per call.
+one short-lived connection per call (never shared between threads). Schema setup runs
+once, under a lock, and every connection waits up to `BUSY_TIMEOUT_S` for a locked DB.
 """
 
 from __future__ import annotations
@@ -9,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import json
 import sqlite3
+import threading
 import time
 from collections.abc import Callable, Iterable
 from contextlib import closing
@@ -18,6 +20,8 @@ from typing import Any
 
 Clock = Callable[[], float]
 """Returns the current time as epoch seconds; injectable for tests."""
+
+BUSY_TIMEOUT_S = 10.0
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS http_cache (
@@ -77,16 +81,30 @@ class ResponseCache:
         self.path = path
         self.clock = clock
         self._ready = False
+        self._init_lock = threading.Lock()
+
+    def _open(self) -> sqlite3.Connection:
+        # Each connection is created, used and closed in a single worker thread.
+        conn = sqlite3.connect(self.path, timeout=BUSY_TIMEOUT_S)
+        conn.execute(f"PRAGMA busy_timeout = {int(BUSY_TIMEOUT_S * 1000)}")
+        return conn
+
+    def _initialize(self) -> None:
+        """Create the folder, enable WAL and create tables exactly once per instance."""
+        with self._init_lock:
+            if self._ready:
+                return
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            with closing(self._open()) as conn:
+                conn.execute("PRAGMA journal_mode=WAL")
+                conn.executescript(_SCHEMA)
+                conn.commit()
+            self._ready = True
 
     def _connect(self) -> sqlite3.Connection:
         if not self._ready:
-            self.path.parent.mkdir(parents=True, exist_ok=True)
-        conn = sqlite3.connect(self.path, timeout=10)
-        if not self._ready:
-            conn.execute("PRAGMA journal_mode=WAL")
-            conn.executescript(_SCHEMA)
-            self._ready = True
-        return conn
+            self._initialize()
+        return self._open()
 
     def _run(self, sql: str, params: Iterable[Any] = ()) -> list[tuple[Any, ...]]:
         with closing(self._connect()) as conn, conn:

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import io
 import logging
 from pathlib import Path
 from typing import Any
@@ -9,7 +10,7 @@ from mcp import Client
 
 from poe_craft_mcp.config import Config
 from poe_craft_mcp.envelope import envelope, source
-from poe_craft_mcp.log import SecretMaskingFilter, register_secret, setup_logging
+from poe_craft_mcp.log import SecretMaskingFilter, add_file_log, register_secret, setup_logging
 from poe_craft_mcp.server import SERVER_NAME, build_server
 
 SECRET = "a1b2c3d4e5f6deadbeef"
@@ -84,3 +85,26 @@ def test_setup_logging_masks_stderr_and_file(
     assert "failed with ***" in captured.err and "boom ***" in captured.err
     assert "failed with ***" in logged and "boom ***" in logged
     assert SECRET not in captured.err + logged
+
+
+def test_child_logger_handlers_added_later_are_masked(tmp_path: Path) -> None:
+    register_secret(SECRET)
+    child = logging.getLogger("poe_craft_mcp.test.child")
+    stream = io.StringIO()
+    plain = logging.StreamHandler(stream)
+    child.addHandler(plain)
+    file_logger = add_file_log("poe_craft_mcp.test.ratelimit", tmp_path / "ratelimit.log")
+    try:
+        try:
+            raise ValueError(SECRET)
+        except ValueError:
+            child.exception("cookie %s %r", SECRET, {"POESESSID": SECRET}, stack_info=True)
+        file_logger.warning("state for %s", SECRET)
+    finally:
+        child.removeHandler(plain)
+        for handler in list(file_logger.handlers):
+            file_logger.removeHandler(handler)
+            handler.close()
+    emitted = stream.getvalue() + (tmp_path / "ratelimit.log").read_text(encoding="utf-8")
+    assert SECRET not in emitted
+    assert "cookie ***" in emitted and "ValueError: ***" in emitted and "state for ***" in emitted

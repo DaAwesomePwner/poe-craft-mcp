@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import traceback
 from pathlib import Path
 
 import pytest
@@ -55,7 +56,7 @@ def test_env_var_pointing_nowhere_is_an_error(monkeypatch: pytest.MonkeyPatch) -
     [
         "undercut_pct = 51",
         "undercut_pct = -1",
-        "ninja_min_interval_min = 1",
+        "ninja_min_interval_min = 14",
         "trade_sample = 0",
         "unknown_key = 1",
         'contact = "a\\nb"',
@@ -86,3 +87,38 @@ def test_example_config_is_valid_and_matches_defaults() -> None:
     cfg = load_config(REPO_ROOT / "config.example.toml")
     defaults = Config()
     assert cfg.model_dump(exclude={"data_dir"}) == defaults.model_dump(exclude={"data_dir"})
+
+
+def test_minimum_ninja_interval_is_fifteen_minutes(tmp_path: Path) -> None:
+    path = tmp_path / "ok.toml"
+    path.write_text("ninja_min_interval_min = 15\n")
+    assert load_config(path).ninja_min_interval_min == 15
+
+
+SECRET = "f00dfacecafebabe1234"
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        f'POESESSID = "{SECRET}"',
+        f'poesessid = "{SECRET}"',
+        f'cookie = "{SECRET}"',
+        f'league = ["{SECRET}"]',
+        f'log_level = "{SECRET}"',
+        f'[trade]\nsession = "{SECRET}"',
+    ],
+)
+def test_config_errors_never_echo_input_values(tmp_path: Path, body: str) -> None:
+    path = tmp_path / "leaky.toml"
+    path.write_text(body + "\n")
+    with pytest.raises(ConfigError) as info:
+        load_config(path)
+    assert SECRET not in "".join(traceback.format_exception(info.value))
+
+
+def test_poesessid_key_gets_a_helpful_error(tmp_path: Path) -> None:
+    path = tmp_path / "c.toml"
+    path.write_text('POESESSID = "x"\n')
+    with pytest.raises(ConfigError, match="keychain"):
+        load_config(path)
