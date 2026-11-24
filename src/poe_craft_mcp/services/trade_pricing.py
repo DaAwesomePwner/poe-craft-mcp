@@ -100,11 +100,13 @@ def to_listings(raw: list[dict[str, Any]]) -> list[Listing]:
     return listings
 
 
-async def wants_instant_buyout(trade: TradeClient, target: str | dict[str, Any]) -> bool:
+async def wants_instant_buyout(
+    trade: TradeClient, target: str | dict[str, Any], deadline: float
+) -> bool:
     """True when a search query itself filters on instant buyout (`status: securable`), so
     pricing keeps that filter instead of widening it to every online listing."""
     if isinstance(target, str):
-        tq = await trade.resolve_saved_url(target)
+        tq = await trade.resolve_saved_url(target, deadline=deadline)
     else:
         tq = query_from_body(target, "search")
     status = tq.query.get("status")
@@ -156,8 +158,11 @@ async def price_outcome(
 
     try:
         trade = get_trade(ctx)
-        instant = await wants_instant_buyout(trade, target)
-        found = await trade.listings_for(resolved.id, target, n, instant_buyout=instant)
+        deadline = trade.limiter.deadline()  # one wait budget for resolving and searching
+        instant = await wants_instant_buyout(trade, target, deadline)
+        found = await trade.listings_for(
+            resolved.id, target, n, instant_buyout=instant, deadline=deadline
+        )
     except RateLimited as exc:
         raise PricingUnavailable(str(exc), exc.retry_after) from None
     except TradeError as exc:

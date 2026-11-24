@@ -232,3 +232,26 @@ async def test_rates_and_divine_come_from_one_currency_snapshot(
     price = await price_outcome(ctx, query_json={"type": "Simple Robe"}, sample=1)
     assert len(reads) == 1
     assert price.median == price.chaos_per_divine == 195.0
+
+
+async def test_cold_opaque_saved_url_shares_one_wait_budget(
+    ctx: AppContext, api: NinjaApi, trade: TradeClient, clock: FakeClock
+) -> None:
+    body = {"id": "Ab12Cd", "query": {"type": "Simple Robe"}}
+    headers = {  # after this request the next search must wait 10 s
+        "x-rate-limit-policy": "trade-search-request-limit",
+        "x-rate-limit-rules": "Ip",
+        "x-rate-limit-ip": "2:10:60",
+        "x-rate-limit-ip-state": "2:10:0",
+    }
+    saved = api.router.get(f"{TRADE}/api/trade/search/Settlers/Ab12Cd").respond(
+        200, json=body, headers=headers
+    )
+    search, _ = mock_trade(api)
+    await get_ninja(ctx).dataset("Currency")
+    trade.limiter.paused_until = clock() + 15  # resolving waits 15 s
+    start = clock()
+    with pytest.raises(PricingUnavailable) as err:
+        await price_outcome(ctx, trade_url=f"{TRADE}/trade/search/Settlers/Ab12Cd")
+    assert saved.call_count == 1 and search.call_count == 0
+    assert clock() - start <= 20 and err.value.retry_after is not None

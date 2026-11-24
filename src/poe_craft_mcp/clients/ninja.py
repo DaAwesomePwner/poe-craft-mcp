@@ -73,10 +73,10 @@ class NinjaClient:
                 if transient:
                     raise
             else:
-                if force and result.stale:  # CachedHttpClient's backoff was sized for interval 0
-                    self._remember_failure(key, FetchError(key, "forced refresh failed"))
-                else:
+                if not result.stale:
                     self._failures.pop(key, None)
+                elif force:  # CachedHttpClient's backoff was sized for interval 0
+                    self._remember_failure(key, FetchError(key, "forced refresh failed"))
                 return result
         cached = await self.ctx.cache.get(key)
         if cached is not None and known[1].status != 404:

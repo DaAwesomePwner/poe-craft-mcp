@@ -225,6 +225,7 @@ class TradeClient:
         *,
         online_only: bool = True,
         instant_buyout: bool = False,
+        deadline: float | None = None,
     ) -> dict[str, Any]:
         """The cheapest `sample` listings for a saved URL or query JSON, cached per query.
         Any saved sort is replaced by price ascending.
@@ -232,9 +233,9 @@ class TradeClient:
         Returns `{listings, total, search_id, age_seconds, from_cache, stale}`. Raises
         `RateLimited` or `TradeError` only when there is no cached copy to fall back on,
         and `ValueError` for `instant_buyout` on a bulk exchange query. All requests share
-        one `max_wait_s` deadline.
+        one deadline: the caller's, else `max_wait_s` from now.
         """
-        deadline = self.limiter.deadline()
+        deadline = self.limiter.deadline() if deadline is None else deadline
         sample = sample or self.config.trade_sample
         if isinstance(query_or_url, str):
             tq = await self.resolve_saved_url(query_or_url, deadline=deadline)

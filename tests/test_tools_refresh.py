@@ -1,11 +1,14 @@
 # ruff: noqa: F811, F401  (fixtures are re-used from test_ninja)
 from __future__ import annotations
 
+import asyncio
 from typing import TYPE_CHECKING, Any
 
+import pytest
 from test_ninja import INTERVAL, NinjaApi, api, ctx
 from test_tools_prices import call, session
 
+from poe_craft_mcp.clients.ninja import get_ninja
 from poe_craft_mcp.context import AppContext
 
 if TYPE_CHECKING:
@@ -129,3 +132,32 @@ async def test_forced_failure_backs_off_for_the_full_interval(
         clock.advance(INTERVAL)
         await call(client, "get_prices", category="Essence")
         assert api.hits("Essence") == hits + 1
+
+
+async def test_ordinary_read_during_forced_failure_keeps_the_backoff(
+    ctx: AppContext, api: NinjaApi, clock: FakeClock, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ninja = get_ninja(ctx)
+    league = await ninja.current_league()
+    await ninja.dataset("Essence", league)
+    clock.advance(INTERVAL + 10)  # expired
+    api.fail("Essence", 503)
+    real_get_json = ctx.http.get_json
+    entered, release = asyncio.Event(), asyncio.Event()
+
+    async def gated(url: str, params: Any = None, min_interval_s: float = 0.0) -> Any:
+        if min_interval_s > 0:  # hold the ordinary read in flight across the forced one
+            entered.set()
+            await release.wait()
+        return await real_get_json(url, params, min_interval_s=min_interval_s)
+
+    monkeypatch.setattr(ctx.http, "get_json", gated)
+    ordinary = asyncio.ensure_future(ninja.dataset("Essence", league))
+    await entered.wait()
+    forced = await ninja.dataset("Essence", league, force=True)
+    release.set()
+    assert forced.stale and (await ordinary).stale
+    hits = api.hits("Essence")
+    clock.advance(61)
+    assert (await ninja.dataset("Essence", league)).stale
+    assert api.hits("Essence") == hits
