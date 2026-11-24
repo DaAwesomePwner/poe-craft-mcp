@@ -348,6 +348,7 @@ async def test_exchange_url_prices_bulk_and_rejects_instant_buyout(trade: TradeC
     ("base_url", "sends_cookie"),
     [
         ("https://www.pathofexile.com:8443", False),
+        ("https://www.pathofexile.com:0", False),
         ("https://www.pathofexile.com:443", True),
     ],
 )

@@ -83,7 +83,7 @@ class TradeClient:
         await self._client.aclose()
 
     async def _cookie(self, url: httpx.URL) -> str | None:
-        port = url.port or {"https": 443, "http": 80}.get(url.scheme)
+        port = url.port if url.port is not None else {"https": 443, "http": 80}.get(url.scheme)
         if (url.scheme, url.host, port) not in COOKIE_ORIGINS:
             return None
         if not self._session_loaded:

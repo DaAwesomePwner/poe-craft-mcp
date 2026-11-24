@@ -22,6 +22,7 @@ Clock = Callable[[], float]
 """Returns the current time as epoch seconds; injectable for tests."""
 
 BUSY_TIMEOUT_S = 10.0
+_SQL_BATCH = 500
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS http_cache (
@@ -119,6 +120,19 @@ class ResponseCache:
         etag, body, status, fetched_at = rows[0]
         age = max(0.0, self.clock() - fetched_at)
         return CachedResponse(url, bytes(body), status, etag, fetched_at, age)
+
+    async def fetched_at(self, urls: Iterable[str]) -> dict[str, float]:
+        """`fetched_at` of each cached URL among `urls`, without loading any body."""
+        wanted = list(dict.fromkeys(urls))
+        found: dict[str, float] = {}
+        for start in range(0, len(wanted), _SQL_BATCH):
+            chunk = wanted[start : start + _SQL_BATCH]
+            marks = ",".join("?" * len(chunk))
+            rows = await asyncio.to_thread(
+                self._run, f"SELECT url, fetched_at FROM http_cache WHERE url IN ({marks})", chunk
+            )
+            found.update((url, float(at)) for url, at in rows)
+        return found
 
     async def put(
         self, url: str, body: bytes | str, status: int = 200, etag: str | None = None
