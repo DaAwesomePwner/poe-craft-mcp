@@ -238,6 +238,8 @@ class RateLimiter:
                 raise RateLimited(wait, f"{kind} would wait {wait:.1f}s")
             if wait > 0:
                 await self.sleep(wait)
+            if deadline - self.clock() <= 0:
+                raise RateLimited(self.wait_for(kind), f"{kind} deadline reached before sending")
             sent_at = self.clock()
             for policy in self._policies_for(kind):
                 policy.record(sent_at)

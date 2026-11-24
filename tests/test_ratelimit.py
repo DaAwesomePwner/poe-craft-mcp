@@ -281,6 +281,26 @@ async def test_slow_send_is_cut_off_at_the_deadline(limiter: RateLimiter, clock:
     assert limiter.policies["search"].last_sent is not None
     assert (await limiter.run("fetch", reply())).status_code == 200
 
+
+async def test_deadline_reached_during_pacing_sleep_records_no_hit(
+    limiter: RateLimiter, clock: FakeClock
+) -> None:
+    await limiter.run("fetch", reply())  # bootstrap pacing: the next call waits 2 s
+    sent = False
+
+    async def send() -> httpx.Response:
+        nonlocal sent
+        sent = True
+        return httpx.Response(200)
+
+    with pytest.raises(RateLimited, match="before sending"):
+        await limiter.run("fetch", send, deadline=clock() + 2.0)
+    assert not sent
+    assert limiter.policies["fetch"].last_sent == pytest.approx(clock() - 2.0)
+    assert not limiter._lock.locked()
+
+
+async def test_unlearned_kind_honours_restriction_seen_elsewhere(limiter: RateLimiter) -> None:
     restricted = {
         **SEARCH_HEADERS,
         "X-Rate-Limit-Ip-State": "6:10:60,1:60:0,2:300:0,151:21600:0",

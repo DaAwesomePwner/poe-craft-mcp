@@ -16,12 +16,14 @@ from poe_craft_mcp.engine.types import (
 DEFAULT_UNDERCUT = 0.05
 STALE_SECONDS = 30 * 60
 PROBABILITY_TOLERANCE = 1e-6
-_N90_MAX_CORRECTION = 64
+MIN_PROBABILITY = 1e-12
 
 
 def _check_p(p: float) -> None:
     if not 0 < p <= 1:
         raise ValueError(f"success probability must be in (0, 1], got {p}")
+    if p < MIN_PROBABILITY:
+        raise ValueError("success probability below 1e-12 is outside the supported range")
 
 
 def expected_attempts(p: float) -> float:
@@ -40,15 +42,11 @@ def n90(p: float) -> int:
         return 1
     log_q, target = math.log1p(-p), math.log(0.1)
     n = max(1, math.ceil(target / log_q))
-    # The estimate is off by at most a few steps. For tiny p, n * log_q stops changing between
-    # neighbouring n (a float plateau), so cap the correction instead of walking the plateau.
-    for _ in range(_N90_MAX_CORRECTION):
-        if n * log_q <= target:
-            break
+    # p >= MIN_PROBABILITY keeps n <= ~2.3e12, so each step moves n * log_q by far more
+    # than an ulp and the correction terminates after a step or two.
+    while n * log_q > target:
         n += 1
-    for _ in range(_N90_MAX_CORRECTION):
-        if n <= 1 or (n - 1) * log_q > target:
-            break
+    while n > 1 and (n - 1) * log_q <= target:
         n -= 1
     return n
 
