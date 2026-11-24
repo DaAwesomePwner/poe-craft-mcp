@@ -92,12 +92,17 @@ def plan_enchant(data: GameData, req: SurveyRequest, enchant: ClusterEnchant) ->
     return Plan(enchant, info, split, excluded, jewel)
 
 
-def provisional_value(above: Sequence[float], min_listings: int, undercut: float) -> float:
-    """The min_listings-th cheapest listing at or above T, or the cheapest one when fewer are
-    listed, less undercut (a seller must undercut the cheapest competing listing). `above` is
-    sorted ascending and not empty."""
-    k = min_listings if len(above) >= min_listings else 1
-    return above[k - 1] * (1 - undercut)
+def provisional_value(above: Sequence[float], min_listings: int, undercut: float) -> float | None:
+    """The min_listings-th cheapest listing at or above T, less undercut; None when fewer than
+    min_listings are listed there (a thin candidate is never provisionally sellable). `above`
+    is sorted ascending."""
+    if len(above) < min_listings:
+        return None
+    return above[min_listings - 1] * (1 - undercut)
+
+
+def _name(data: GameData, pair: Pair) -> str:
+    return " + ".join(sorted(notable_name(data.mods[m]) for m in pair))
 
 
 def _discovery_summary(disc: Discovery) -> dict[str, Any]:
@@ -123,7 +128,9 @@ async def evaluate(
     values = {
         p: provisional_value(disc.above.pairs[p], req.min_listings, undercut) for p in candidates
     }
-    sellable = {p: v for p, v in values.items() if v >= threshold}
+    sellable = {p: v for p, v in values.items() if v is not None and v >= threshold}
+    thin = [p for p, v in values.items() if v is None]
+    thin.sort(key=lambda p: (-disc.above.pairs[p][0], sorted(p)))
     p_any = hit_value = 0.0
     if sellable:
         odds = await asyncio.to_thread(
@@ -137,6 +144,7 @@ async def evaluate(
         "enchant_id": plan.enchant.id,
         "provisional_sellable_pairs": len(sellable),
         "candidates": classes["candidate"],
+        "thin_candidates": len(thin),
         "not_sellable": classes["not_sellable"],
         "unpriceable_pairs": len(plan.split.unpriceable_pairs),
         "p_any_provisional": chance(p_any),
@@ -147,11 +155,19 @@ async def evaluate(
         },
         "top_pairs": [
             {
-                "pair": " + ".join(sorted(notable_name(data.mods[m]) for m in p)),
+                "pair": _name(data, p),
                 "provisional_value_div": round(sellable[p] / per_divine, 3),
                 "listings_at_or_above": len(disc.above.pairs[p]),
             }
             for p in top
+        ],
+        "top_thin_candidates": [
+            {
+                "pair": _name(data, p),
+                "cheapest_at_or_above_div": round(disc.above.pairs[p][0] / per_divine, 3),
+                "listings_at_or_above": len(disc.above.pairs[p]),
+            }
+            for p in thin[:TOP_PAIRS]
         ],
         "from_cache": all(s.get("from_cache") for s in disc.sources),
         "discovery": _discovery_summary(disc),

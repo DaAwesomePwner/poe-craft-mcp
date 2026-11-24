@@ -35,7 +35,7 @@ from test_ninja import NinjaApi, api, ctx
 from test_tools_prices import call, session
 from test_trade_pricing import trade
 
-from poe_craft_mcp.clients.trade import TradeClient, get_trade
+from poe_craft_mcp.clients.trade import NotCached, TradeClient, get_trade
 from poe_craft_mcp.context import AppContext
 from poe_craft_mcp.gamedata.combos import combo_odds
 from poe_craft_mcp.gamedata.loader import load_gamedata
@@ -86,7 +86,8 @@ def fake(api: NinjaApi, trade: TradeClient) -> EnchantTrade:
 
 def scenario(fake: EnchantTrade) -> None:
     """CDoT: LT+FL not sellable; candidates ES+WP (4 listings at or above T, 3rd cheapest 3 div),
-    ES+LT (200c: 190c after the undercut, under T) and WP+FL (1.5 div). Crit: PP+OM 1.1 div."""
+    WP+FL (3 listings, 3rd cheapest 1.7 div) and ES+LT (one 5 div listing: thin, so never
+    provisionally sellable). Crit: PP+OM, 3 listings, 3rd cheapest 1.3 div."""
     fake.responses[(CDOT, "below")] = [
         (50, "chaos", (T_LT, T_FL)),
         (55, "chaos", (T_LT, T_FL)),
@@ -99,11 +100,13 @@ def scenario(fake: EnchantTrade) -> None:
         (2.5, "divine", (T_ES, T_WP)),
         (3, "divine", (T_ES, T_WP)),
         (4, "divine", (T_ES, T_WP)),
-        (200, "chaos", (T_ES, T_LT)),
+        (5, "divine", (T_ES, T_LT)),
         (1.5, "divine", (T_WP, T_FL)),
+        (1.6, "divine", (T_WP, T_FL)),
+        (1.7, "divine", (T_WP, T_FL)),
     ]
     fake.responses[(CRIT, "below")] = []
-    fake.responses[(CRIT, "above")] = [(1.1, "divine", (T_PP, T_OM))]
+    fake.responses[(CRIT, "above")] = [(d, "divine", (T_PP, T_OM)) for d in (1.1, 1.2, 1.3)]
 
 
 def request(**overrides: Any) -> SurveyRequest:
@@ -148,8 +151,8 @@ async def test_passives_must_fit_the_base(ctx: AppContext, data: GameData) -> No
 
 def test_provisional_value_rule() -> None:
     assert provisional_value([100, 200, 300, 400], 3, 0.05) == pytest.approx(285.0)
-    # Fewer than min_listings listed: a seller must undercut the cheapest competing listing.
-    assert provisional_value([100, 200], 3, 0.05) == pytest.approx(95.0)
+    # Fewer than min_listings listed at or above T: a thin candidate, never valued.
+    assert provisional_value([1000, 2000], 3, 0.05) is None
     assert provisional_value([250], 1, 0.0) == 250
 
 
@@ -196,9 +199,10 @@ async def test_survey_ranks_enchants(ctx: AppContext, fake: EnchantTrade, data: 
     assert "own trade ids" in skipped["Damage over Time"]
     assert "no pairs" in skipped["Minion Life"]
 
-    cdot_values = {pair(ES, WP): 3 * DIV * 0.95, pair(FL, WP): 1.5 * DIV * 0.95}
+    # ES+LT (one 5 div listing) is thin: left out of the odds.
+    cdot_values = {pair(ES, WP): 3 * DIV * 0.95, pair(FL, WP): 1.7 * DIV * 0.95}
     p_cdot = p_hit(data, CDOT_ID, cdot_values)
-    p_crit = p_hit(data, CRIT_ID, {pair(OM, PP): 1.1 * DIV * 0.95})
+    p_crit = p_hit(data, CRIT_ID, {pair(OM, PP): 1.3 * DIV * 0.95})
     rows = {r["enchant"]: r for r in payload["ranking"]}
     expected = sorted(
         ["Chaos Damage over Time", "Critical Chance"],
@@ -207,11 +211,8 @@ async def test_survey_ranks_enchants(ctx: AppContext, fake: EnchantTrade, data: 
     assert [r["enchant"] for r in payload["ranking"]] == expected
     cdot = rows["Chaos Damage over Time"]
     assert cdot["enchant_id"] == CDOT_ID
-    assert (cdot["provisional_sellable_pairs"], cdot["candidates"], cdot["not_sellable"]) == (
-        2,
-        3,
-        1,
-    )
+    counts = ("provisional_sellable_pairs", "candidates", "thin_candidates", "not_sellable")
+    assert tuple(cdot[k] for k in counts) == (2, 3, 1, 1)
     assert cdot["unpriceable_pairs"] == 4
     assert cdot["p_any_provisional"] == pytest.approx(p_cdot, rel=1e-5)
     assert cdot["expected_attempts_per_hit"] == pytest.approx(1 / p_cdot, abs=0.05)
@@ -226,16 +227,27 @@ async def test_survey_ranks_enchants(ctx: AppContext, fake: EnchantTrade, data: 
         },
         {
             "pair": "Flow of Life + Wicked Pall",
-            "provisional_value_div": 1.425,
-            "listings_at_or_above": 1,
+            "provisional_value_div": 1.615,
+            "listings_at_or_above": 3,
         },
     ]
+    assert cdot["top_thin_candidates"] == [
+        {
+            "pair": "Eternal Suffering + Low Tolerance",
+            "cheapest_at_or_above_div": 5.0,
+            "listings_at_or_above": 1,
+        }
+    ]
+    crit = rows["Critical Chance"]
+    assert crit["p_any_provisional"] == pytest.approx(p_crit, rel=1e-5)
+    assert crit["thin_candidates"] == 0 and crit["top_thin_candidates"] == []
     assert cdot["from_cache"] is False
     assert payload["pending"] == [] and payload["stopped"] is None and "note" not in payload
     assert payload["discovery"]["enchants_surveyed"] == 2
     assert payload["discovery"]["truncated"] == []
     assert "cluster_combos" in payload["next_step"]
     assert any("PROVISIONAL" in a for a in payload["assumptions"])
+    assert any("lower bounds" in a for a in payload["assumptions"])
     assert any("Only instant-buyout" in a for a in payload["assumptions"])
     names = [s["name"] for s in sources]
     assert names.count("pathofexile.com trade") == 4 and "poe.ninja Currency" in names
@@ -248,7 +260,7 @@ async def test_limit_and_truncation(ctx: AppContext, fake: EnchantTrade, data: G
     payload, _ = await cluster_combo_survey(ctx, data, request(limit=1))
     assert len(payload["ranking"]) == 1 and payload["ranked_count"] == 2
     assert any("capped at limit=1" in w for w in payload["warnings"])
-    assert payload["discovery"]["truncated"] == ["Critical Chance: at or above T fetched 1 of 40"]
+    assert payload["discovery"]["truncated"] == ["Critical Chance: at or above T fetched 3 of 40"]
     assert "truncation_effect" in payload["discovery"]
 
 
@@ -324,6 +336,68 @@ async def test_stale_discovery_is_never_used(
     assert fake.searched((CRIT, "below")) == 1
 
 
+async def test_thin_candidates_never_count(
+    ctx: AppContext, fake: EnchantTrade, data: GameData
+) -> None:
+    """A 14 div pair with one listing at or above T would fail confirmation (too few
+    listings): it is a thin candidate and adds nothing to p_any_provisional."""
+    scenario(fake)
+    fake.responses[(CRIT, "above")] = [(14, "divine", (T_PP, T_OM))]
+    payload, _ = await cluster_combo_survey(ctx, data, request(enchants=("Critical Chance",)))
+    row = payload["ranking"][0]
+    assert (row["candidates"], row["thin_candidates"], row["provisional_sellable_pairs"]) == (
+        1,
+        1,
+        0,
+    )
+    assert row["p_any_provisional"] == 0 and row["expected_attempts_per_hit"] is None
+    assert row["top_pairs"] == []
+    assert row["top_thin_candidates"][0]["cheapest_at_or_above_div"] == 14.0
+
+
+async def test_fetch_rate_limit_keeps_the_retry_hint(
+    ctx: AppContext,
+    fake: EnchantTrade,
+    data: GameData,
+    clock: FakeClock,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Live: "serving stale cache (trade rate limited (fetch would wait 219.3s))". The search
+    goes through, the fetch is refused, the expired copy is served: the hint is the fetch's.
+    (Band A has no listings, so it needs no fetch; band B's fetch is the refused one.)"""
+    scenario(fake)
+    await cluster_combo_survey(ctx, data, request(enchants=("Critical Chance",)))
+    clock.advance(25 * 60)
+    limiter = get_trade(ctx).limiter
+    monkeypatch.setattr(limiter, "wait_for", lambda kind: 219.3 if kind == "fetch" else 0.0)
+    payload, _ = await cluster_combo_survey(ctx, data, request(enchants=("Critical Chance",)))
+    assert payload["stopped"].startswith("the trade site served only a stale cached copy")
+    assert payload["stopped"].endswith("retry in about 219s")
+    assert payload["retry_after_seconds"] == 220
+    assert fake.searched((CRIT, "below")) == 2 and fake.searched((CRIT, "above")) == 2
+    assert payload["pending"] == [{"enchant": "Critical Chance", "enchant_id": CRIT_ID}]
+
+
+async def test_stale_without_a_limiter_wait_says_so(
+    ctx: AppContext,
+    fake: EnchantTrade,
+    data: GameData,
+    clock: FakeClock,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A failing trade site (HTTP 500) serves the expired copy while the limiter reports no
+    wait for any kind: the survey says the hint is unavailable rather than a bare null."""
+    scenario(fake)
+    await cluster_combo_survey(ctx, data, request(enchants=("Critical Chance",)))
+    clock.advance(25 * 60)
+    monkeypatch.setattr(get_trade(ctx).limiter, "wait_for", lambda kind: 0.0)
+    fake.fail[(CRIT, "below")] = httpx.Response(500, json={"error": {"message": "down"}})
+    payload, _ = await cluster_combo_survey(ctx, data, request(enchants=("Critical Chance",)))
+    assert payload["stopped"].endswith("retry hint unavailable")
+    assert payload["retry_after_seconds"] is None
+    assert payload["pending"] == [{"enchant": "Critical Chance", "enchant_id": CRIT_ID}]
+
+
 async def test_cache_phase_never_makes_a_request(
     ctx: AppContext,
     fake: EnchantTrade,
@@ -350,6 +424,28 @@ async def test_cache_phase_never_makes_a_request(
     assert [r["enchant"] for r in payload["ranking"]] == ["Critical Chance"]
     assert payload["ranking"][0]["from_cache"] is True
     assert payload["discovery"]["from_cache"] == 1 and payload["pending"] == []
+
+
+async def test_from_cache_total_matches_the_rows(
+    ctx: AppContext, fake: EnchantTrade, data: GameData, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The cache phase misses Critical Chance (as if another call filled the cache just
+    after), so the live phase reads it from the cache: its row and the total both say so."""
+    scenario(fake)
+    await cluster_combo_survey(ctx, data, request(enchants=("Critical Chance",)))
+    trade = get_trade(ctx)
+    real = trade.listings_for
+
+    async def late_fill(*args: Any, **kwargs: Any) -> dict[str, Any]:
+        if kwargs.get("cache_only"):
+            raise NotCached("trade listings are not cached")
+        return await real(*args, **kwargs)
+
+    monkeypatch.setattr(trade, "listings_for", late_fill)
+    payload, _ = await cluster_combo_survey(ctx, data, request(enchants=("Critical Chance",)))
+    assert len(fake.searches) == 2  # served from the cache, no new search
+    assert payload["ranking"][0]["from_cache"] is True
+    assert payload["discovery"]["from_cache"] == 1
 
 
 async def test_listings_exactly_at_threshold_are_not_below(

@@ -44,12 +44,13 @@ def register(server: MCPServer, ctx: AppContext) -> None:
         (names or ids; default every current enchant of the base with a trade filter).
         For each enchant: two cheap discovery searches (rares with 2+ of its notables priced
         strictly below / at or above the threshold, `discovery_sample` 1-100 listings each).
-        A candidate pair (fewer than `min_listings` listings below, some at or above) gets a
-        PROVISIONAL value: the `min_listings`-th cheapest listing at or above the threshold,
-        or the cheapest one when fewer are listed, less undercut. Pairs worth at least the
-        threshold feed the exact odds of the Alteration/Augmentation anchor cycle plus one Regal.
+        A candidate pair (fewer than `min_listings` listings below, some at or above) with at
+        least `min_listings` listings at or above the threshold gets a PROVISIONAL value: the
+        `min_listings`-th cheapest of them, less undercut; fewer listings make it a thin
+        candidate, never provisionally sellable. Pairs worth at least the threshold feed the
+        exact odds of the Alteration/Augmentation anchor cycle plus one Regal.
         Returns a ranking (by p_any_provisional, then sellable pair count; at most `limit`
-        rows) with the provisional sellable, candidate and not_sellable counts, the chance per
+        rows) with the provisional sellable, candidate, thin and not_sellable counts, the chance per
         attempt, expected attempts per hit, provisional hit value per attempt and the top
         pairs; plus skipped enchants with reasons, pending ones, discovery totals, sources,
         assumptions and warnings. Nothing is confirmed: run `cluster_combos` on the top

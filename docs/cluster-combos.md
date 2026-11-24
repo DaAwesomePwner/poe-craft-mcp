@@ -65,10 +65,14 @@ never counted as a pair listing. Each legal, priceable pair falls in one class:
 | `thin` | only below T, fewer than `min_listings` |
 | `unlisted` | never seen |
 
-**Provisional value (survey only).** A candidate's provisional value is the `min_listings`-th
-cheapest listing at or above T, or the cheapest one when fewer are listed, less undercut (a
-seller must undercut the cheapest competing listing). It is provisionally sellable when that
-value is at least T. The survey feeds those values to the exact odds and reports
+**Provisional value (survey only).** A candidate is provisionally sellable only when it has at
+least `min_listings` listings at or above T in search B (the liquidity `cluster_combos` will
+demand) and its provisional value, the `min_listings`-th cheapest listing at or above T less
+undercut, is at least T. A candidate with fewer listings there is a **thin candidate**: it is
+counted (`thin_candidates`, with examples in `top_thin_candidates`) but never provisionally
+sellable and left out of `p_any_provisional`. When search B is truncated its counts are lower
+bounds, so a thin candidate may have more listings than were fetched. The survey feeds those
+values to the exact odds and reports
 `p_any_provisional` and the hit value per attempt, with no miss value and no costs. It ranks
 enchants by the unrounded `p_any_provisional`, then by the number of provisionally sellable
 pairs, then by enchant id.
@@ -76,9 +80,10 @@ pairs, then by enchant id.
 **Survey order.** Enchants whose two discovery searches are cached and fresh are surveyed first,
 straight from the cached listings with no request. The rest are searched live, one band at a
 time, until `max_seconds`, a rate limit or a stale reply (the trade site refused a new search
-and an expired copy was served). The survey stops there with the retry hint, never uses the
-stale copy, and lists that enchant and the rest as `pending`; calling again continues from the
-cache. Enchants with a legacy tag, no trade option, no priceable pair or a notable without any
+and an expired copy was served). The survey stops there with the retry hint (the longest wait
+the rate limiter reports for any request kind, search or fetch, or "retry hint unavailable"
+when it reports none), never uses the stale copy, and lists that enchant and the rest as
+`pending`; calling again continues from the cache. Enchants with a legacy tag, no trade option, no priceable pair or a notable without any
 explicit trade id are skipped with a reason.
 
 **Confirmation (`cluster_combos`).** Candidates are priced with their exact pair search, most
@@ -159,7 +164,8 @@ Enchants with a legacy tag (`old_do_not_use_`) come from older patches; the surv
 - A rare with a sellable pair and a third notable (a Large jewel can hold three) is credited
   with its most valuable pair's price, although the pair searches exclude such jewels.
 - A miss holding two notables that are not a sellable pair is valued like a one-anchor miss.
-- Survey values are provisional: one discovery listing per pair, not the exact pair search.
+- Survey values are provisional: one discovery listing per pair (the `min_listings`-th
+  cheapest at or above T), not the p25 of the exact pair search.
   They can rank enchants but should not decide a craft; confirm with `cluster_combos`.
 - The survey's discovery searches use T in chaos, so when the poe.ninja Divine rate changes the
   cached searches no longer match and are run again.
