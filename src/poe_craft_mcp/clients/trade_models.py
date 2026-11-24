@@ -162,7 +162,8 @@ def explicit_stat_ids(item: dict[str, Any]) -> list[str]:
     for mod_type in ("explicit", "fractured"):
         pairs = hashes.get(mod_type)
         for pair in pairs if isinstance(pairs, list) else []:
-            stat_id = pair[0] if isinstance(pair, list | tuple) and pair else pair
+            # A row is exactly [stat_id, indices]; indices may be null.
+            stat_id = pair[0] if isinstance(pair, list | tuple) and len(pair) == 2 else None
             match = STAT_ID_RE.fullmatch(stat_id) if isinstance(stat_id, str) else None
             if match:
                 found.add(f"explicit.{match.group(1)}")

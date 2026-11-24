@@ -507,6 +507,9 @@ def test_normalize_listing_tolerates_null_indices_and_bare_ids() -> None:
         {"explicit": "stat_1"},
         {"explicit": [None, 3, [], [None, [0]], ["pseudo.stat_1", [0]], ["explicit.stat_x", [0]]]},
         {"explicit": {"explicit.stat_1": [0]}, "fractured": 7},
+        {"explicit": ["explicit.stat_30"]},
+        {"explicit": [["explicit.stat_30"]]},
+        {"explicit": [["explicit.stat_30", [0], "extra"]]},
     ],
 )
 def test_normalize_listing_malformed_hashes_give_no_stats(hashes: Any) -> None:
