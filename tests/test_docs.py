@@ -16,8 +16,6 @@ from poe_craft_mcp.server import build_server
 
 ROOT = Path(__file__).resolve().parents[1]
 README = (ROOT / "README.md").read_text(encoding="utf-8")
-# Built in a parallel task; documented from their agreed signatures until they merge.
-PENDING_TOOLS = {"evaluate_recipe", "rank_crafts"}
 
 
 def _tools_in_readme() -> set[str]:
@@ -30,8 +28,8 @@ async def test_readme_tools_exist(config: Config) -> None:
         registered = {tool.name for tool in (await client.list_tools()).tools}
     documented = _tools_in_readme()
     assert documented >= {"get_league_status", "price_trade_query", "refresh", "mod_odds"}
-    assert documented - PENDING_TOOLS <= registered
-    assert registered - PENDING_TOOLS <= documented, "tool missing from the README table"
+    assert documented <= registered
+    assert registered <= documented, "tool missing from the README table"
 
 
 def test_readme_minimal_recipe_validates(tmp_path: Path) -> None:
