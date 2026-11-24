@@ -35,12 +35,17 @@ _SECONDS_RE = re.compile(r"\d+(\.\d+)?", re.ASCII)
 
 
 class RateLimited(Exception):
-    """A trade call would wait more than the limit, or the server answered 429."""
+    """A trade call would wait more than the limit, or the server answered 429.
 
-    def __init__(self, retry_after: float, reason: str) -> None:
+    `cause` is "deadline" when the caller's deadline refused or cut short a wait or send,
+    "server" for a 429 or a queue pause caused by one.
+    """
+
+    def __init__(self, retry_after: float, reason: str, cause: str = "server") -> None:
         super().__init__(f"trade rate limited ({reason}); retry in {retry_after:.0f}s")
         self.retry_after = retry_after
         self.reason = reason
+        self.cause = cause
 
 
 def parse_triples(value: str) -> list[tuple[int, int, int]]:
@@ -229,17 +234,21 @@ class RateLimiter:
         try:
             await asyncio.wait_for(self._lock.acquire(), max(0.0, deadline - self.clock()))
         except TimeoutError:
-            raise RateLimited(self.wait_for(kind), "trade queue busy past deadline") from None
+            raise RateLimited(
+                self.wait_for(kind), "trade queue busy past deadline", "deadline"
+            ) from None
         try:
             if self._pause_epoch != epoch:
                 raise RateLimited(self.wait_for(kind), "queue paused by a 429")
             wait = self.wait_for(kind)
             if self.clock() + wait > deadline:
-                raise RateLimited(wait, f"{kind} would wait {wait:.1f}s")
+                raise RateLimited(wait, f"{kind} would wait {wait:.1f}s", "deadline")
             if wait > 0:
                 await self.sleep(wait)
             if deadline - self.clock() <= 0:
-                raise RateLimited(self.wait_for(kind), f"{kind} deadline reached before sending")
+                raise RateLimited(
+                    self.wait_for(kind), f"{kind} deadline reached before sending", "deadline"
+                )
             sent_at = self.clock()
             for policy in self._policies_for(kind):
                 policy.record(sent_at)
@@ -248,7 +257,7 @@ class RateLimiter:
             except TimeoutError:
                 # The hit stays recorded: the request may have reached the server.
                 raise RateLimited(
-                    self.wait_for(kind), f"{kind} request ran past deadline"
+                    self.wait_for(kind), f"{kind} request ran past deadline", "deadline"
                 ) from None
             self._observe(kind, response)
             if response.status_code == 429:

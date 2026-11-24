@@ -400,3 +400,15 @@ async def test_stale_rates_do_not_age_chaos_only_listings(
     bow = by_name(ev)["crafted bow"]
     assert (bow.stale, bow.age_seconds) == (False, 0)
     assert not any("crafted bow" in w for w in ev.warnings)
+
+
+async def test_server_429_just_before_the_budget_is_a_price_error(
+    ctx: AppContext, api: NinjaApi, trade: TradeClient, clock: FakeClock
+) -> None:
+    search = api.router.post(f"{TRADE}/api/trade/search/Covens").mock(
+        return_value=httpx.Response(429, headers={"Retry-After": "2"})
+    )
+    pricer = Pricer(ctx, deadline=clock() + 1, clock=clock)  # "second 59" of the budget
+    priced = await pricer.trade("outcome", "x", SAVED_URL)
+    assert priced.error is not None and priced.error.startswith("price unavailable")
+    assert "HTTP 429" in priced.error and search.call_count == 1

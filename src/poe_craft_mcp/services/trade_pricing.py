@@ -37,12 +37,17 @@ class PricingUnavailable(Exception):
     """No price could be produced and no cached listings exist to fall back on.
 
     `reason` is safe to show to the user (secret-masked, no stack trace). `retry_after` is
-    the seconds to wait when the trade site rate-limited us, else None.
+    the seconds to wait when the trade site rate-limited us, else None. `cause` is
+    "deadline" only when the caller's `deadline` (not the limiter's own wait cap or the
+    server) stopped the lookup.
     """
 
-    def __init__(self, reason: str, retry_after: float | None = None) -> None:
+    def __init__(
+        self, reason: str, retry_after: float | None = None, cause: str | None = None
+    ) -> None:
         self.reason = mask_secrets(reason)
         self.retry_after = retry_after
+        self.cause = cause
         super().__init__(self.reason)
 
 
@@ -167,9 +172,8 @@ async def price_outcome(
 
     try:
         trade = get_trade(ctx)
-        wait_until = trade.limiter.deadline()  # one wait budget for resolving and searching
-        if deadline is not None:
-            wait_until = min(wait_until, deadline)
+        own_limit = trade.limiter.deadline()  # one wait budget for resolving and searching
+        wait_until = own_limit if deadline is None else min(own_limit, deadline)
         instant = await wants_instant_buyout(trade, target, wait_until, cache_only)
         found = await trade.listings_for(
             resolved.id,
@@ -182,7 +186,10 @@ async def price_outcome(
     except NotCached as exc:
         raise QuoteNotCached(f"trade site: {exc}") from None
     except RateLimited as exc:
-        raise PricingUnavailable(str(exc), exc.retry_after) from None
+        ours = exc.cause == "deadline" and wait_until < own_limit
+        ours = ours and ctx.cache.clock() + exc.retry_after <= own_limit
+        cause = "deadline" if ours else None
+        raise PricingUnavailable(str(exc), exc.retry_after, cause) from None
     except TradeError as exc:
         raise PricingUnavailable(f"trade site: {exc}") from None
 
