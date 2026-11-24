@@ -233,11 +233,12 @@ async def test_state_logged_to_file_at_any_level_without_stderr_echo(
         ("-5", 60.0),
         ("garbage", 60.0),
         (None, 60.0),
-        ("99999", 3600.0),
+        ("99999", 99999.0),
+        ("9" * 400, 60.0),
         ("Tue, 14 Nov 2023 22:13:50 GMT", 30.0),
     ],
 )
-def test_retry_after_parsing_is_strict_and_clamped(value: str | None, expected: float) -> None:
+def test_retry_after_parsing_is_strict(value: str | None, expected: float) -> None:
     now = 1_700_000_000.0  # 2023-11-14T22:13:20Z
     headers = httpx.Headers({} if value is None else {"Retry-After": value})
     assert retry_after_seconds(headers, now) == pytest.approx(expected)
@@ -275,3 +276,51 @@ async def test_unlearned_kind_honours_restriction_seen_elsewhere(limiter: RateLi
         await limiter.run("exchange", reply())
     # search waits out its own restriction.
     assert limiter.wait_for("search") == pytest.approx(60.0)
+
+
+async def test_long_retry_after_is_honoured_unclamped(
+    limiter: RateLimiter, clock: FakeClock
+) -> None:
+    start = clock()
+    with pytest.raises(RateLimited) as err:
+        await limiter.run("search", reply(429, {"Retry-After": "7200"}))
+    assert err.value.retry_after == pytest.approx(7920.0)
+    clock.advance(3961)
+    with pytest.raises(RateLimited):
+        await limiter.run("fetch", reply())
+    assert limiter.state()["paused_until"] == pytest.approx(start + 7920.0)
+
+
+async def test_unlearned_sibling_keeps_one_hit_spare(
+    limiter: RateLimiter, sleep: FakeSleep
+) -> None:
+    near_full = {
+        "X-Rate-Limit-Policy": "trade-search-request-limit",
+        "X-Rate-Limit-Rules": "Ip",
+        "X-Rate-Limit-Ip": "5:10:60",
+        "X-Rate-Limit-Ip-State": "4:10:0",
+    }
+    await limiter.run("search", reply(200, near_full))
+    assert limiter.wait_for("exchange") == pytest.approx(10.0)
+    await limiter.run("exchange", reply())
+    assert sleep.calls == [10.0]
+
+
+async def test_fetch_never_inherits_search_restriction(limiter: RateLimiter) -> None:
+    restricted = {
+        **SEARCH_HEADERS,
+        "X-Rate-Limit-Ip-State": "6:10:60,1:60:0,2:300:0,151:21600:0",
+    }
+    await limiter.run("search", reply(200, restricted))
+    assert limiter.wait_for("fetch") == 0.0
+    assert limiter.wait_for("search") == pytest.approx(60.0)
+    fetch_full = {
+        "X-Rate-Limit-Policy": "trade-fetch-request-limit",
+        "X-Rate-Limit-Rules": "Ip",
+        "X-Rate-Limit-Ip": "12:4:120",
+        "X-Rate-Limit-Ip-State": "13:4:120",
+    }
+    await limiter.run("fetch", reply(200, fetch_full))
+    # A fetch restriction never gates exchange (search's sibling) either.
+    assert limiter.wait_for("exchange") == pytest.approx(60.0)
+    assert limiter.wait_for("fetch") == pytest.approx(120.0)

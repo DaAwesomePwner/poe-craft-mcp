@@ -31,7 +31,6 @@ BOOTSTRAP_INTERVAL_S = 2.0
 MAX_WAIT_S = 20.0
 PAUSE_FACTOR = 1.1
 DEFAULT_RETRY_AFTER_S = 60.0
-MAX_RETRY_AFTER_S = 3600.0
 _SECONDS_RE = re.compile(r"\d+(\.\d+)?", re.ASCII)
 
 
@@ -134,8 +133,8 @@ class Policy:
 
 
 def retry_after_seconds(headers: Mapping[str, str], now: float) -> float:
-    """Seconds from `Retry-After` (delta seconds or HTTP-date), clamped to
-    [0, MAX_RETRY_AFTER_S]; missing or invalid values give `DEFAULT_RETRY_AFTER_S`."""
+    """Seconds from `Retry-After` (delta seconds or HTTP-date, never negative). Missing,
+    malformed or non-finite values give `DEFAULT_RETRY_AFTER_S`."""
     raw = headers.get("retry-after", "").strip()
     seconds: float | None = None
     if _SECONDS_RE.fullmatch(raw):
@@ -148,9 +147,7 @@ def retry_after_seconds(headers: Mapping[str, str], now: float) -> float:
     if seconds is None or not math.isfinite(seconds):
         log.warning("invalid or missing Retry-After %r; using %.0fs", raw, DEFAULT_RETRY_AFTER_S)
         return DEFAULT_RETRY_AFTER_S
-    if seconds > MAX_RETRY_AFTER_S:
-        log.warning("Retry-After %r clamped to %.0fs", raw, MAX_RETRY_AFTER_S)
-    return min(max(0.0, seconds), MAX_RETRY_AFTER_S)
+    return max(0.0, seconds)
 
 
 def setup_state_log(path: Path) -> logging.Logger:
@@ -195,13 +192,24 @@ class RateLimiter:
         """An absolute deadline `max_wait_s` from now, to share across one operation's calls."""
         return self.clock() + self.max_wait_s
 
+    def _policies_for(self, kind: str) -> list[Policy]:
+        """Policies whose state gates `kind`: its own once learned; before that, its default
+        bucket (bootstrap pacing) plus the learned policies of its design-default siblings."""
+        own = self._policy(kind)
+        if kind in self._learned:
+            return [own]
+        group = DEFAULT_KIND_POLICY.get(kind, kind)
+        siblings = [
+            self._policy(k)
+            for k in sorted(self._learned)
+            if k != kind and DEFAULT_KIND_POLICY.get(k, k) == group
+        ]
+        return [own, *(p for p in siblings if p is not own)]
+
     def wait_for(self, kind: str) -> float:
         now = self.clock()
-        waits = [self.paused_until - now, self._policy(kind).wait(now, self.bootstrap_s)]
-        if kind not in self._learned:
-            # Its own policy is unknown yet: it may share any restriction seen elsewhere.
-            waits += [p.restricted_until - now for p in self.policies.values()]
-        return max(0.0, *waits)
+        waits = [p.wait(now, self.bootstrap_s) for p in self._policies_for(kind)]
+        return max(0.0, self.paused_until - now, *waits)
 
     async def run(
         self,
@@ -230,7 +238,9 @@ class RateLimiter:
                 raise RateLimited(wait, f"{kind} would wait {wait:.1f}s")
             if wait > 0:
                 await self.sleep(wait)
-            self._policy(kind).record(self.clock())
+            sent_at = self.clock()
+            for policy in self._policies_for(kind):
+                policy.record(sent_at)
             response = await send()
             self._observe(kind, response)
             if response.status_code == 429:

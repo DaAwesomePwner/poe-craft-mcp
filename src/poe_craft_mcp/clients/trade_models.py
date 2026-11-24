@@ -118,6 +118,17 @@ def with_status(
     return out
 
 
+def contains_text(value: Any, needle: str) -> bool:
+    """True if `needle` occurs in any string key or value of decoded JSON."""
+    if isinstance(value, str):
+        return needle in value
+    if isinstance(value, dict):
+        return any(contains_text(k, needle) or contains_text(v, needle) for k, v in value.items())
+    if isinstance(value, list):
+        return any(contains_text(v, needle) for v in value)
+    return False
+
+
 def query_hash(*parts: Any) -> str:
     canonical = json.dumps(parts, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()[:32]

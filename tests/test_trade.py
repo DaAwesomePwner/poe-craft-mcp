@@ -342,3 +342,46 @@ async def test_exchange_url_prices_bulk_and_rejects_instant_buyout(trade: TradeC
     assert (sent["query"]["want"], sent["query"]["have"]) == (["divine"], ["chaos"])
     assert sent["sort"] == {"have": "asc"}
     assert len(result["listings"]) == 3 and result["total"] == 9
+
+
+@pytest.mark.parametrize(
+    ("base_url", "sends_cookie"),
+    [
+        ("https://www.pathofexile.com:8443", False),
+        ("https://www.pathofexile.com:443", True),
+    ],
+)
+@respx.mock
+async def test_cookie_requires_default_https_port(
+    base_url: str, sends_cookie: bool, tmp_path: Path, cache: ResponseCache, clock: FakeClock
+) -> None:
+    config = Config(data_dir=tmp_path / "data", trade_base_url=base_url)
+    trade = make_client(config, cache, clock)
+    route = respx.post(url__regex=r".*/api/trade/search/Covens$").mock(
+        return_value=recorded("search")
+    )
+    await trade.search("Covens", {"type": "Simple Robe"})
+    assert ("Cookie" in route.calls.last.request.headers) is sends_cookie
+    await trade.aclose()
+
+
+@respx.mock
+async def test_json_escaped_cookie_echo_is_rejected_before_caching(
+    config: Config, cache: ResponseCache, clock: FakeClock
+) -> None:
+    trade = make_client(config, cache, clock)
+    escaped = "".join(f"\\u{ord(c):04x}" for c in SECRET)
+    assert SECRET not in escaped
+    route = respx.post(f"{BASE}/api/trade/search/Covens")
+    route.respond(
+        200,
+        content=f'{{"id": "x{escaped}", "result": [], "total": 0}}'.encode(),
+        headers={"Content-Type": "application/json"},
+    )
+    with pytest.raises(TradeError, match="echoed") as err:
+        await trade.listings_for("Covens", SAVED_URL, sample=10)
+    assert SECRET not in str(err.value) + repr(err.value)
+    route.respond(200, json={"id": "clean", "result": [], "total": 0})
+    result = await trade.listings_for("Covens", SAVED_URL, sample=10)
+    assert (result["from_cache"], result["search_id"]) == (False, "clean")
+    await trade.aclose()

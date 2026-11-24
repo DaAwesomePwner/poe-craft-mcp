@@ -21,6 +21,7 @@ from poe_craft_mcp.clients.trade_models import (
     SearchResult,
     TradeError,
     TradeQuery,
+    contains_text,
     decode_search_id,
     normalize_listing,
     normalize_offer,
@@ -49,7 +50,7 @@ EXCHANGE_PATH = "/api/trade/exchange/{league}"
 FETCH_BATCH = 10
 PRICE_SORT = {"price": "asc"}
 EXCHANGE_SORT = {"have": "asc"}
-COOKIE_ORIGINS = frozenset({("https", "www.pathofexile.com")})
+COOKIE_ORIGINS = frozenset({("https", "www.pathofexile.com", 443)})
 
 
 def _seg(value: str) -> str:
@@ -82,7 +83,8 @@ class TradeClient:
         await self._client.aclose()
 
     async def _cookie(self, url: httpx.URL) -> str | None:
-        if (url.scheme, url.host) not in COOKIE_ORIGINS:
+        port = url.port or {"https": 443, "http": 80}.get(url.scheme)
+        if (url.scheme, url.host, port) not in COOKIE_ORIGINS:
             return None
         if not self._session_loaded:
             self._session = await asyncio.to_thread(self._poesessid)
@@ -130,6 +132,8 @@ class TradeClient:
             raise TradeError(f"{method} {path}: HTTP {status} {detail or ''}".rstrip(), status)
         if not isinstance(data, dict):
             raise TradeError(f"{method} {path}: unexpected response body", status)
+        if session and contains_text(data, session):
+            raise TradeError(f"{method} {path}: response echoed the session cookie", status)
         return data
 
     async def resolve_saved_url(self, url: str, *, deadline: float | None = None) -> TradeQuery:
