@@ -99,9 +99,16 @@ def mod_odds(
     if setup.kind == "regal":
         warnings += magic.check_existing(item, existing, MAGIC, setup.model)
         item = replace(item, tags=item.tags | {t for m in existing for t in m.adds_tags})
-        already = [m.id for m in targets if m.id in {e.id for e in existing}]
-        if already:
-            raise GameDataError(f"target(s) already among existing_mods: {', '.join(already)}")
+        present = {e.id for e in existing}
+        remaining = [m for m in targets if m.id not in present]
+        if not remaining:
+            raise GameDataError(
+                "every target is already among existing_mods; list the mods the Regal must add"
+            )
+        if len(remaining) < len(targets):
+            skipped = ", ".join(m.id for m in targets if m.id in present)
+            warnings.append(f"target(s) already among existing_mods, not counted: {skipped}")
+        targets = remaining
     elif existing:
         warnings.append("existing_mods ignored: only the 'regal' method uses them")
         existing = []

@@ -63,13 +63,18 @@ Chances below 1e-12 are unsupported.
 #### Magic-item methods and cluster jewels
 
 - `alt`: one Orb of Alteration per attempt (1 or 2 affixes, half each).
-- `alt_aug`: one cycle is an Alteration plus, when it gave a single non-target affix and a
-  target can still roll on the open side, an Augmentation. The odds report
+- `alt_aug`: one cycle is an Alteration plus, when it gave a single non-target affix, an
+  Augmentation. Spending rule: the Augmentation is used only when the open affix side can still
+  roll a target (a lone non-target prefix when every target is a prefix gets the next
+  Alteration instead). Success odds do not depend on this rule; the currency counts do, and
+  they are reported under it (also listed in the result's `assumptions`). The odds report
   `expected_materials` per success, e.g. `{alteration: 5.2, augmentation: 0.9}`. Step
   materials are per attempt (cycle), so list the Alteration with `qty: 1` and the Augmentation
   with `qty` = augmentation / alteration (Augmentations used per cycle).
 - `regal`: the chance a Regal Orb on the magic item whose mods are `existing_mods` (mods.json
-  ids, at most one prefix and one suffix) adds a target. Mod groups of the existing mods are
+  ids, at most one prefix and one suffix) adds a target. `existing_mods` is the whole magic
+  item, not only the notable: list its second affix too. Targets already present are not
+  counted. Mod groups of the existing mods are
   blocked, the rare side limits apply (3 + 3 on items, 2 + 2 on jewels) and tags the existing
   mods add (`adds_tags`) count.
 - Cluster jewels (`Small/Medium/Large Cluster Jewel`) need `enchant`: the "Added Small Passive
@@ -79,7 +84,13 @@ Chances below 1e-12 are unsupported.
   optional and only checked against the jewel's range. Only `alt`, `alt_aug` and `regal` are
   modelled for cluster jewels.
 
-A two-step cluster craft (notable A, then notable B):
+A two-step cluster craft (notable A, then notable B). Step 1 can end in two states: notable
+A alone (only when the Alteration gave one affix and it was A) or A plus a suffix (two-affix
+Alteration, or a lone suffix then the Augmentation). The Regal's chance differs between them,
+because the suffix blocks its mod group and takes a suffix slot. This example models the
+branch "Wicked Pall + the T1 fire resistance suffix"; a recipe for the lone-notable branch
+lists only `AfflictionNotableWickedPall_`. Write the branch you expect, and say which in
+`notes`.
 
 ```yaml
 - action: alt_aug
@@ -90,7 +101,7 @@ A two-step cluster craft (notable A, then notable B):
   repeat_until: "Eternal Suffering"
   p_success: { p_source: weights, method: regal, target_mods: [AfflictionNotableEternalSuffering],
                enchant: "Chaos Damage over Time", ilvl: 84,
-               existing_mods: [AfflictionNotableWickedPall_] }
+               existing_mods: [AfflictionNotableWickedPall_, AfflictionJewelSmallPassivesGrantFireRes] }
 ```
 
 A missed Regal leaves a rare without notable B: it must be scoured (or sold) and step 1 redone.

@@ -109,3 +109,22 @@ async def test_service_passes_enchant_and_existing_mods(tmp_path: Path) -> None:
     assert report["enchant"]["name"] == DOT and report["enchant"]["passives"] == 4
     assert set(report["expected_materials"]) == {"alteration", "augmentation"}
     assert regal.report()["expected_materials"] == {"regal": pytest.approx(2738 / 348, abs=1e-4)}
+
+
+async def test_docs_example_states_the_regal_branch(tmp_path: Path) -> None:
+    docs = (Path(__file__).resolve().parents[1] / "docs" / "recipes.md").read_text("utf-8")
+    block = docs.split("A two-step cluster craft", 1)[1].split("```yaml", 1)[1].split("```")[0]
+    raw = {**cluster_recipe(), "steps": yaml.safe_load(block)}
+    recipe = Recipe.model_validate(raw)
+    regal_step = recipe.steps[1]
+    assert regal_step.p_success is not None
+    fire_res = "AfflictionJewelSmallPassivesGrantFireRes"
+    assert regal_step.p_success.existing_mods == [WP, fire_res]  # type: ignore[union-attr]
+    ctx = AppContext.create(Config(data_dir=tmp_path / "data"))
+    ctx.services["gamedata"] = load_gamedata(FIXTURES / "gamedata")
+    try:
+        chance = await resolve_chance(ctx, recipe, "regal", regal_step.p_success)
+    finally:
+        await ctx.aclose()
+    # Wicked Pall + Fire Res branch: prefixes 2086 - 348, suffixes 1000 - 500.
+    assert chance.p == pytest.approx(348 / (1738 + 500), abs=1e-8)

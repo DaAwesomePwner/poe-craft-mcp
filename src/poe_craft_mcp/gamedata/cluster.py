@@ -34,8 +34,9 @@ CLUSTER_ASSUMPTIONS = (
     "decides which notables and small-passive mods can roll",
     "Notable limits follow from the export plus the affix limits: a notable adds the tag "
     "has_affliction_notable (adds_tags), whose generation weight 0 is matched before "
-    "expansion_jewel_small, so a Small Cluster Jewel holds one notable; Medium (both notables "
-    f"prefixes) and Large (two prefixes, one suffix) are capped by the side limits ({WIKI_URL})",
+    "expansion_jewel_small, so a Small Cluster Jewel holds one notable; every suffix notable is "
+    "in mod group AfflictionNotableLargeSuffix, so a Large holds one suffix notable; Medium (two "
+    f"prefix notables) and Large (two prefix notables) are capped by the side limits ({WIKI_URL})",
     "The number of added passives does not change mod weights (the export has no such rule)",
 )
 

@@ -1522,5 +1522,131 @@
   ],
   "text": "Added Small Passive Skills also grant: Regenerate 0.1% of Life per Second",
   "type": "AfflictionJewelSmallPassivesGrantLifeRegen"
+ },
+ "AfflictionNotableThaumophage": {
+  "adds_tags": [
+   "has_affliction_notable"
+  ],
+  "domain": "affliction_jewel",
+  "generation_type": "suffix",
+  "generation_weights": [
+   {
+    "tag": "expansion_jewel_large",
+    "weight": 100
+   },
+   {
+    "tag": "expansion_jewel_medium",
+    "weight": 100
+   },
+   {
+    "tag": "has_affliction_notable",
+    "weight": 0
+   },
+   {
+    "tag": "expansion_jewel_small",
+    "weight": 100
+   },
+   {
+    "tag": "default",
+    "weight": 0
+   }
+  ],
+  "grants_effects": [],
+  "groups": [
+   "AfflictionNotableLargeSuffix"
+  ],
+  "implicit_tags": [
+   "caster_damage",
+   "defences",
+   "energy_shield",
+   "damage",
+   "caster"
+  ],
+  "is_essence_only": false,
+  "name": "of Significance",
+  "required_level": 50,
+  "spawn_weights": [
+   {
+    "tag": "affliction_spell_damage",
+    "weight": 750
+   },
+   {
+    "tag": "default",
+    "weight": 0
+   }
+  ],
+  "stats": [
+   {
+    "id": "local_affliction_notable_thaumophage",
+    "max": 1,
+    "min": 1
+   }
+  ],
+  "text": "1 Added Passive Skill is Thaumophage",
+  "type": "AfflictionNotableThaumophage"
+ },
+ "AfflictionNotableEssenceRush": {
+  "adds_tags": [
+   "has_affliction_notable"
+  ],
+  "domain": "affliction_jewel",
+  "generation_type": "suffix",
+  "generation_weights": [
+   {
+    "tag": "expansion_jewel_large",
+    "weight": 100
+   },
+   {
+    "tag": "expansion_jewel_medium",
+    "weight": 100
+   },
+   {
+    "tag": "has_affliction_notable",
+    "weight": 0
+   },
+   {
+    "tag": "expansion_jewel_small",
+    "weight": 100
+   },
+   {
+    "tag": "default",
+    "weight": 0
+   }
+  ],
+  "grants_effects": [],
+  "groups": [
+   "AfflictionNotableLargeSuffix"
+  ],
+  "implicit_tags": [
+   "caster_damage",
+   "defences",
+   "energy_shield",
+   "damage",
+   "attack",
+   "caster",
+   "speed"
+  ],
+  "is_essence_only": false,
+  "name": "of Significance",
+  "required_level": 50,
+  "spawn_weights": [
+   {
+    "tag": "affliction_spell_damage",
+    "weight": 750
+   },
+   {
+    "tag": "default",
+    "weight": 0
+   }
+  ],
+  "stats": [
+   {
+    "id": "local_affliction_notable_essence_rush",
+    "max": 1,
+    "min": 1
+   }
+  ],
+  "text": "1 Added Passive Skill is Essence Rush",
+  "type": "AfflictionNotableEssenceRush"
  }
 }

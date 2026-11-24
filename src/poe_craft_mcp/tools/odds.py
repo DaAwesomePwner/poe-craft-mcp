@@ -46,8 +46,10 @@ def register(server: MCPServer, ctx: AppContext) -> None:
         """Chance per attempt of rolling at least one of `target_mods` (mods.json ids such as
         'IncreasedLife7') on `base` (base type name, e.g. 'Vaal Regalia') at item level `ilvl`.
         `method`: 'chaos', 'alt', 'alt_aug' (Alteration, plus an Augmentation when it gave one
-        non-target affix), 'regal' (adds one mod to the magic item whose mods are
-        `existing_mods`), 'essence:<essence name>' or 'fossil:<fossil>[,<fossil>...]'.
+        non-target affix and the open side can still roll a target; augmentations per success
+        are counted under that rule), 'regal' (adds one mod to the magic item whose mods are
+        `existing_mods`: every mod on it, e.g. the notable and its second affix),
+        'essence:<essence name>' or 'fossil:<fossil>[,<fossil>...]'.
         Cluster jewels (Small/Medium/Large Cluster Jewel) need `enchant`: the 'Added Small
         Passive Skills grant' enchant by name or id, e.g. 'Chaos Damage over Time' or
         'Minion Life'; `passives` (added passive count) is optional.

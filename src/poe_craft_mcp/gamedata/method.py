@@ -29,10 +29,15 @@ MAGIC_COUNT = (
     "Alteration gives 1 or 2 affixes with equal chance (assumed), at most 1 prefix and 1 suffix"
 )
 ALT_AUG_RULE = (
-    "alt_aug cycle: Alteration, then an Augmentation only when the Alteration gave one affix that "
-    "is not a target and a target can still roll on the open side; the Augmentation's affix is "
-    "drawn like an Alteration's second affix, so a cycle succeeds as often as a 2-affix "
-    "Alteration and expected_materials counts Augmentations actually used"
+    "alt_aug cycle: Alteration, then an Augmentation only when the Alteration gave one affix "
+    "that is not a target; the Augmentation's affix is drawn like an Alteration's second affix, "
+    "so a cycle succeeds as often as a 2-affix Alteration"
+)
+AUG_SPENDING_RULE = (
+    "Augmentation is used only when the open affix side can still roll a target (no shared mod "
+    "group); after a lone non-target affix whose open side holds no target, the next "
+    "Alteration is used instead. Success odds are the same either way; expected_materials "
+    "(alteration and augmentation per success) count currency under this rule"
 )
 REGAL_RULE = (
     "Regal Orb adds exactly one affix to the magic item in existing_mods, drawn from the mods "
@@ -157,7 +162,8 @@ def _simple(base: BaseItem, kind: str) -> CraftSetup | None:
     if kind in ("alt", "alteration"):
         return CraftSetup(label="alt", model=MAGIC, kind="magic")
     if kind in ("alt_aug", "alt+aug", "altaug"):
-        return CraftSetup(label="alt_aug", model=MAGIC, kind="magic", assumptions=(ALT_AUG_RULE,))
+        rules = (ALT_AUG_RULE, AUG_SPENDING_RULE)
+        return CraftSetup(label="alt_aug", model=MAGIC, kind="magic", assumptions=rules)
     if kind in ("regal", "regal_orb"):
         jewel = base.domain in JEWEL_DOMAINS
         rules = (REGAL_RULE, JEWEL_LIMITS) if jewel else (REGAL_RULE,)

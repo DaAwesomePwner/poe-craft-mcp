@@ -83,10 +83,13 @@ def test_enchant_excludes_notable_with_reason(data: GameData) -> None:
 
 
 def test_alt_aug_on_cluster_matches_hand_calculation(data: GameData) -> None:
-    # A cycle succeeds like a 2-affix Alteration. An Augmentation is used only when the
-    # Alteration gave one suffix (1000 of 3086): a prefix target can still roll. After one
-    # non-target prefix the open side is suffix, which holds no target, so no Augmentation.
+    # A cycle succeeds like a 2-affix Alteration.
     p = 348 / ALL + SUFFIX / ALL * 348 / PREFIX
+    # Spending rule: augment only when the open side can still roll a target. Only a lone
+    # suffix (1000 of 3086, on the half of Alterations giving one affix) leaves the prefix side
+    # open for Wicked Pall; after a lone non-target prefix the open side is suffix, which holds
+    # no target, so the next Alteration follows instead. (Augmenting every lone non-target
+    # affix would cost 0.5 * (3086 - 348) / 3086 per cycle; this rule is cheaper.)
     augs_per_cycle = 0.5 * SUFFIX / ALL
     result = odds(data, [WP], "alt_aug")
     assert result["method"] == "alt_aug"
@@ -97,6 +100,10 @@ def test_alt_aug_on_cluster_matches_hand_calculation(data: GameData) -> None:
     }
     assert result["calculation"] == {"method": "exact", "resolved": True}
     assert any("Augmentation only when" in a for a in result["assumptions"])
+    assert any(
+        a.startswith("Augmentation is used only when the open affix side can still roll a target")
+        for a in result["assumptions"]
+    )
 
 
 def test_alt_aug_on_normal_item(data: GameData) -> None:
@@ -122,6 +129,49 @@ def test_regal_with_existing_mods_on_cluster(data: GameData) -> None:
     assert result["existing_mods"] == existing
     assert result["expected_materials"] == {"regal": pytest.approx(1 / p, abs=1e-4)}
     assert any("Rare jewels have at most 2 prefixes" in a for a in result["assumptions"])
+
+
+def test_regal_skips_targets_already_present(data: GameData) -> None:
+    # Wicked Pall is on the item, so only Eternal Suffering counts: 348 / (1738 + 1000).
+    result = odds(data, [WP, ES], "regal", existing_mods=[WP])
+    assert result["chance_per_attempt"] == pytest.approx(348 / 2738, abs=1e-8)
+    assert result["target_mods"] == [ES]
+    assert any("already among existing_mods, not counted" in w for w in result["warnings"])
+
+
+def test_regal_chance_depends_on_the_whole_magic_item(data: GameData) -> None:
+    # The two states alt_aug can leave: Wicked Pall alone, or Wicked Pall + Fire Res (which
+    # blocks its group and leaves 500 suffix weight): 348/2738 versus 348/2238.
+    alone = odds(data, [ES], "regal", existing_mods=[WP])
+    with_suffix = odds(
+        data, [ES], "regal", existing_mods=[WP, "AfflictionJewelSmallPassivesGrantFireRes"]
+    )
+    assert alone["chance_per_attempt"] == pytest.approx(348 / 2738, abs=1e-8)
+    assert with_suffix["chance_per_attempt"] == pytest.approx(348 / 2238, abs=1e-8)
+
+
+def test_large_cluster_holds_one_suffix_notable(data: GameData) -> None:
+    # Every suffix notable is in mod group AfflictionNotableLargeSuffix. Large, Spell Damage,
+    # ilvl 84: prefixes IncreasedEffect 500, GrantLife_ 500; suffixes FireRes 500,
+    # LifeRegen 500, CastSpeed 350, Thaumophage 750, EssenceRush 750.
+    def regal(existing: list[str]) -> dict[str, Any]:
+        return mod_odds(
+            data,
+            "Large Cluster Jewel",
+            84,
+            ["AfflictionNotableEssenceRush"],
+            "regal",
+            enchant="Spell Damage",
+            passives=8,
+            existing_mods=existing,
+        )
+
+    blocked = regal(["AfflictionNotableThaumophage"])
+    assert blocked["chance_per_attempt"] == 0
+    assert any("shares a mod group with the existing mod(s)" in w for w in blocked["warnings"])
+    # Existing GrantLife_ (prefix) leaves 500 prefix + 2850 suffix weight.
+    open_side = regal(["AfflictionJewelSmallPassivesGrantLife_"])
+    assert open_side["chance_per_attempt"] == pytest.approx(750 / 3350, abs=1e-8)
 
 
 def test_regal_on_a_full_side(data: GameData) -> None:
@@ -173,7 +223,7 @@ def test_small_cluster_holds_one_notable(data: GameData) -> None:
     ("kw", "message"),
     [
         ({"existing_mods": None}, "needs existing_mods"),
-        ({"existing_mods": [ES]}, "already among existing_mods"),
+        ({"existing_mods": [ES]}, "every target is already among existing_mods"),
         ({"existing_mods": [WP, LT]}, "at most 1 prefix"),
     ],
 )
