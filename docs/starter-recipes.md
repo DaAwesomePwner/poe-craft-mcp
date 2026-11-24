@@ -15,7 +15,8 @@ recipe walk through the craft step by step; `get_recipe <id>` shows them.
 ## Live ranking (instant buyout only)
 
 `rank_crafts(budget_div=30, include_unverified=true, min_listings=1)`, finished 2026-11-24 04:38 UTC,
-league Covens, 1 divine = 197.7 chaos, 10 instant-buyout listings per search, 5% undercut. Prices
+league Covens, 1 divine = 197.7 chaos, up to 30 instant-buyout listings per search (config
+`trade_sample` 30), 5% undercut. Prices
 come only from instant-buyout (asynchronous trade) listings; whisper listings are never used.
 From a cold cache the 21 searches hit the trade site's search rate limit, so the ranking was rerun
 in four rounds (waiting out the limit) until every recipe was priced; the oldest quote in the final
@@ -34,10 +35,12 @@ ranking was about 37 minutes old. Chaos values per attempt: C = expected cost, C
 
 Read this before acting on it:
 
-- **Most of the cluster value comes from the misses.** About 97-99% of attempts end as a
-  one-notable rare sold for about 20-24 c; the pair hits add the rest. Profit depends on actually
-  selling many one-notable rares at that price, so list them steadily and re-check the price; a
-  few dozen sales can move it.
+- **Much of the cluster value comes from the misses.** About 95-99% of attempts end as a
+  one-notable rare (95.2% for Large Spell), valued at about 20-24 c. Those are instant-buyout
+  *asking* prices (p25 minus the undercut), not observed sales, and the misses make up roughly
+  52-78% of each cluster craft's expected value. Profit depends on actually selling many
+  one-notable rares near that price, so list them steadily and re-check the price; a few dozen
+  sales can move it.
 - The Quicksilver base was flagged for low volume, and both flask crafts and the wand lose money at
   these prices.
 - These are snapshot numbers: rerun `rank_crafts` before a big batch. The earlier snapshots below
@@ -189,8 +192,7 @@ Mage Hunter + suffix notable is worth more), so the miss values are conservative
 ### Live snapshot (superseded)
 
 **Pre-instant-buyout, superseded** by [Live ranking (instant buyout only)](#live-ranking-instant-buyout-only): taken with online (whisper) listings and the earlier
-magic-or-rare, any-item-level miss searches; it will be refreshed once pricing uses instant-buyout
-listings only.
+magic-or-rare, any-item-level miss searches.
 
 `evaluate_recipe` for each recipe and `rank_crafts(budget_div=30, include_unverified=true,
 tags=["cluster"])`, run 2026-11-24 04:09-04:11 UTC, league Covens, 1 divine = 197.7 chaos,
