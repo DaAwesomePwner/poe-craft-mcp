@@ -17,10 +17,10 @@ PRICING_ASSUMPTIONS = (
     "with fewer there and any at or above T is a candidate, confirmed by its exact search",
     "A pair's value is the p25 of its cheapest listings less undercut_pct; it is sellable when "
     "that value is at least T and it has at least min_listings listings",
-    "Exact pair searches exclude every other priceable notable (a `not` group), so a "
-    "three-notable jewel never counts as a listing of the pair; notables without their own "
-    "trade id cannot be excluded",
-    "A miss sells as a rare with exactly one anchor notable and no other priceable notable "
+    "Exact pair searches exclude every other notable the base can roll at any item level, by "
+    "all of its explicit trade ids (a `not` group), so a three-notable jewel never counts as a "
+    "listing of the pair; if any notable has no explicit trade id, nothing is confirmed",
+    "A miss sells as a rare with exactly one anchor notable and no other notable "
     "(p25 less undercut_pct); the white base is bought at its p25 without undercut",
     "Pair searches fetch max(trade_sample, min_listings) listings (at most 100); a stale cached "
     "copy (served because the trade site refused a new search) never confirms a pair or prices "

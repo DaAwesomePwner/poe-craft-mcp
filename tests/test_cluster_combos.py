@@ -4,7 +4,8 @@
 The trade site is a respx fake that answers each search by its query shape (discovery below or
 above the threshold, an exact pair, the miss search or the white base) with listings carrying
 explicit trade stat ids. Fixture game data: Medium Cluster Jewel, Chaos Damage over Time, five
-prefix notables; Brush with Death has no trade id here, so its pairs are unpriceable.
+prefix notables; Brush with Death has no single trade id here (only an exclusion id), so its
+pairs are unpriceable.
 """
 
 from __future__ import annotations
@@ -45,6 +46,8 @@ GAMEDATA = Path(__file__).resolve().parent / "fixtures" / "gamedata"
 WP, ES = "AfflictionNotableWickedPall_", "AfflictionNotableEternalSuffering"
 LT, FL = "AfflictionNotableLowTolerance", "AfflictionNotableFlowofLife_"
 BRUSH = "AfflictionNotableBrushwithDeath"
+BRUSH_STAT = "local_affliction_notable_brush_with_death"
+T_BR = "explicit.stat_1000000003"  # exclusion-only: Brush with Death stays unpriceable
 T_WP, T_ES = "explicit.stat_1616734644", "explicit.stat_2144634814"
 T_LT, T_FL = "explicit.stat_1000000001", "explicit.stat_1000000002"
 JEWEL = JewelFilter("Medium Cluster Jewel", 4, 4)
@@ -63,13 +66,19 @@ def pkey(a: str, b: str) -> tuple[str, ...]:
 
 @pytest.fixture(scope="module")
 def data() -> GameData:
-    """Fixture export plus made-up trade ids for Low Tolerance and Flow of Life."""
+    """Fixture export plus made-up trade ids for Low Tolerance and Flow of Life, and an
+    exclusion-only id for Brush with Death (unpriceable, but searches can rule it out)."""
     base = load_gamedata(GAMEDATA)
     extra = {
         "local_affliction_notable_low_tolerance": T_LT,
         "local_affliction_notable_flow_of_life": T_FL,
     }
-    return replace(base, trade_stats={**base.trade_stats, **extra})
+    brush = {BRUSH_STAT: (T_BR,)}
+    return replace(
+        base,
+        trade_stats={**base.trade_stats, **extra},
+        explicit_trade_ids={**base.explicit_trade_ids, **brush},
+    )
 
 
 Row = tuple[float, str, tuple[str, ...]]
@@ -625,6 +634,7 @@ async def test_bad_arguments(
 # --- review fixes -----------------------------------------------------------------------------
 
 NOT_LT_FL = {"type": "not", "filters": [{"id": T_LT}, {"id": T_FL}]}  # sorted trade ids
+NOT_OTHERS = {"type": "not", "filters": [{"id": T_LT}, {"id": T_FL}, {"id": T_BR}]}
 EVERY = [T_WP, T_ES, T_LT, T_FL]
 
 
@@ -647,11 +657,11 @@ async def test_three_notable_jewels_never_confirm_a_pair(
     ] * 2
     payload, _ = await cluster_combos(ctx, data, request())
     sent = next(b for b in fake.searches if fake.key(b) == pkey(T_ES, T_WP))
-    assert sent["query"]["stats"][2] == NOT_LT_FL
+    assert sent["query"]["stats"][2] == NOT_OTHERS
     assert [r["pair"] for r in payload["sellable_pairs"]] == ["Flow of Life + Wicked Pall"]
     miss = next(b for b in fake.searches if fake.key(b) == "miss")
     # Only FL+WP sold, so FL and WP are the anchors; ES and LT are excluded.
-    not_anchor = {"type": "not", "filters": [{"id": T_LT}, {"id": T_ES}]}
+    not_anchor = {"type": "not", "filters": [{"id": T_LT}, {"id": T_BR}, {"id": T_ES}]}
     assert miss["query"]["stats"][2] == not_anchor
 
 
@@ -771,11 +781,9 @@ async def test_higher_ilvl_notables_are_excluded(
     ] * 2
     payload, _ = await cluster_combos(ctx, data, request(ilvl=50))
     sent = next(b for b in fake.searches if fake.key(b) == pkey(T_ES, T_WP))
-    assert sent["query"]["stats"][2] == NOT_LT_FL
+    assert sent["query"]["stats"][2] == NOT_OTHERS  # LT, FL, Brush unlock at 68
     assert payload["sellable_pairs"] == [] and payload["confirmation"]["not_sellable"] == 1
     assert payload["discovery"]["below_threshold"]["multi_notable_listings"] == 1
-    brush = "Brush with Death has no explicit trade id, so pair and miss listings may include it"
-    assert any(w.startswith(brush) for w in payload["warnings"])
 
 
 async def test_ambiguous_ids_join_the_exclusion(
@@ -800,7 +808,6 @@ async def test_ambiguous_ids_join_the_exclusion(
         "type": "not",
         "filters": [{"id": i} for i in (T_LT, *EYE)],  # ES, FL and WP are the anchors
     }
-    assert not any("has no explicit trade id" in w for w in payload["warnings"])
     assert payload["notables"]["priceable"] == 4
 
 
@@ -835,3 +842,46 @@ async def test_stale_ninja_rates_alone_do_not_stop_confirmation(
     warnings = payload["warnings"]
     assert any(w.startswith("poe.ninja currency rates are an old cached copy") for w in warnings)
     assert not any("stale cached copy" in w for w in warnings)
+
+
+# --- review round 3 ---------------------------------------------------------------------------
+
+
+async def test_unidentifiable_notable_blocks_confirmation(
+    ctx: AppContext, fake: FakeTrade, data: GameData
+) -> None:
+    """Brush with Death without any explicit trade id: an A+B+Brush jewel would pass every
+    pair search, so nothing is confirmed or valued and no pair, miss or base search runs."""
+    blind = replace(
+        data,
+        explicit_trade_ids={k: v for k, v in data.explicit_trade_ids.items() if k != BRUSH_STAT},
+    )
+    scenario(fake)
+    payload, sources = await cluster_combos(ctx, blind, request())
+    assert {fake.key(b) for b in fake.searches} == {"below", "above"}
+    assert payload["sellable_pairs"] == [] and payload["economics"] is None
+    assert payload["note"].startswith("cannot rule out jewels carrying Brush with Death")
+    assert "refresh the game data export" in payload["note"]
+    assert payload["discovery"]["classes"]["candidate"] == 3
+    assert payload["unconfirmed_count"] == 3
+    assert [r["pair"] for r in payload["unconfirmed"]] == [
+        "Eternal Suffering + Wicked Pall",
+        "Eternal Suffering + Low Tolerance",
+        "Flow of Life + Wicked Pall",
+    ]
+    assert "confirmation" not in payload
+    assert [s["name"] for s in sources].count("pathofexile.com trade") == 2
+
+
+async def test_stale_league_lookup_is_not_stale_rates(
+    ctx: AppContext, api: NinjaApi, fake: FakeTrade, data: GameData, clock: FakeClock
+) -> None:
+    scenario(fake)
+    await cluster_combos(ctx, data, request())
+    clock.advance(25 * 60)  # poe.ninja is due again; only the league lookup fails
+    api.fail("leagues", 500)
+    payload, _ = await cluster_combos(ctx, data, request())
+    warnings = payload["warnings"]
+    assert any(w.startswith("the poe.ninja league lookup is an old cached copy") for w in warnings)
+    assert not any("currency rates are an old cached copy" in w for w in warnings)
+    assert payload["confirmation"]["stopped"] is None

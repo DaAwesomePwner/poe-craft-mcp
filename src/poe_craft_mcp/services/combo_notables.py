@@ -70,8 +70,8 @@ def priceable(data: GameData, info: ClusterNotables) -> Priceable:
 def exclusion_ids(data: GameData, *infos: ClusterNotables) -> tuple[frozenset[str], list[str]]:
     """Every explicit trade id of every notable in `infos` (pass the pool at the top item
     level too: sale searches accept any ilvl), shared or ambiguous ids included, so a `not`
-    group or the discovery grouping can rule out jewels with a third notable. Warns about
-    notables with no explicit trade id at all, which no search can exclude."""
+    group or the discovery grouping can rule out jewels with a third notable. Also returns
+    the names of notables with no explicit trade id at all, which no search can exclude."""
     ids: set[str] = set()
     missing: dict[str, str] = {}
     for info in infos:
@@ -80,12 +80,7 @@ def exclusion_ids(data: GameData, *infos: ClusterNotables) -> tuple[frozenset[st
             ids.update(found)
             if not found:
                 missing[entry.mod.id] = notable_name(entry.mod)
-    warnings = [
-        f"{name} has no explicit trade id, so pair and miss listings may include it as a "
-        "third notable"
-        for _, name in sorted(missing.items())
-    ]
-    return frozenset(ids), warnings
+    return frozenset(ids), [name for _, name in sorted(missing.items())]
 
 
 def enchant_option(data: GameData, info: ClusterNotables) -> int:

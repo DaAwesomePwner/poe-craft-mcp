@@ -81,8 +81,7 @@ async def cluster_combos(
     warnings += split.warnings
     # Sale searches accept any item level: rule out every notable the base can ever roll.
     top = cluster_notables(data, req.base, 100, req.enchant, req.passives)
-    excluded, unexcludable = exclusion_ids(data, info, top)
-    warnings += unexcludable
+    excluded, unidentifiable = exclusion_ids(data, info, top)
     out["notables"] = {
         "count": len(info.notables),
         "priceable": len(split.trade_ids),
@@ -97,10 +96,15 @@ async def cluster_combos(
 
     league, currency, per_divine = await _rates(ctx)
     rates = rates_from(currency.rows)
-    if any(src.get("stale") for src in currency.sources()):
+    if currency.stale:
         warnings.append(
             "poe.ninja currency rates are an old cached copy (poe.ninja is failing); listing "
             "prices are converted with them"
+        )
+    if (currency.league_source or {}).get("stale"):
+        warnings.append(
+            f"the poe.ninja league lookup is an old cached copy; league {league!r} may be out "
+            "of date"
         )
     threshold = req.min_value_div * per_divine
     undercut = ctx.config.undercut_pct / 100
@@ -141,6 +145,18 @@ async def cluster_combos(
     weights = {e.mod.id: e.weight for e in info.notables}
     ordered = order_candidates([p for p, c in disc.classes.items() if c == "candidate"], weights)
     ids = split.trade_ids
+    if unidentifiable:  # a jewel carrying one of them would pass any pair or miss search
+        names = ", ".join(unidentifiable)
+        out.update(
+            sellable_pairs=[],
+            economics=None,
+            unconfirmed_count=len(ordered),
+            unconfirmed=[pair_row(data, p, ids) for p in ordered[:ROW_LIMIT]],
+            note=f"cannot rule out jewels carrying {names} (no explicit trade id in the game "
+            "data), so no pair is confirmed or valued; refresh the game data export",
+        )
+        payload = {**out, "assumptions": assumptions, "warnings": unique(warnings)}
+        return payload, unique_sources([currency.sources(), disc.sources])
     sample = req.pair_sample(ctx.config.trade_sample)
     rules = Rules(threshold, req.min_listings, undercut, req.max_pair_searches, deadline, sample)
     conf = await confirm(
