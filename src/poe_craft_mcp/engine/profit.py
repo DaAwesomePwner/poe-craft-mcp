@@ -16,6 +16,7 @@ from poe_craft_mcp.engine.types import (
 DEFAULT_UNDERCUT = 0.05
 STALE_SECONDS = 30 * 60
 PROBABILITY_TOLERANCE = 1e-6
+_N90_MAX_CORRECTION = 64
 
 
 def _check_p(p: float) -> None:
@@ -39,9 +40,15 @@ def n90(p: float) -> int:
         return 1
     log_q, target = math.log1p(-p), math.log(0.1)
     n = max(1, math.ceil(target / log_q))
-    while n * log_q > target:
+    # The estimate is off by at most a few steps. For tiny p, n * log_q stops changing between
+    # neighbouring n (a float plateau), so cap the correction instead of walking the plateau.
+    for _ in range(_N90_MAX_CORRECTION):
+        if n * log_q <= target:
+            break
         n += 1
-    while n > 1 and (n - 1) * log_q <= target:
+    for _ in range(_N90_MAX_CORRECTION):
+        if n <= 1 or (n - 1) * log_q > target:
+            break
         n -= 1
     return n
 

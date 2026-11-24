@@ -266,7 +266,21 @@ async def test_lock_wait_counts_against_deadline(limiter: RateLimiter, clock: Fa
     await holder
 
 
-async def test_unlearned_kind_honours_restriction_seen_elsewhere(limiter: RateLimiter) -> None:
+async def test_slow_send_is_cut_off_at_the_deadline(limiter: RateLimiter, clock: FakeClock) -> None:
+    async def hang() -> httpx.Response:
+        await asyncio.sleep(30)
+        return httpx.Response(200)
+
+    loop = asyncio.get_running_loop()
+    started = loop.time()
+    with pytest.raises(RateLimited, match="ran past deadline"):
+        await limiter.run("search", hang, deadline=clock() + 0.05)
+    assert loop.time() - started < 5
+    assert not limiter._lock.locked()
+    # The cancelled request may have reached the server, so it still counts as sent.
+    assert limiter.policies["search"].last_sent is not None
+    assert (await limiter.run("fetch", reply())).status_code == 200
+
     restricted = {
         **SEARCH_HEADERS,
         "X-Rate-Limit-Ip-State": "6:10:60,1:60:0,2:300:0,151:21600:0",

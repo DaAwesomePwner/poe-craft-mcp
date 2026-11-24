@@ -1,4 +1,5 @@
 import math
+import time
 
 import pytest
 
@@ -161,6 +162,13 @@ def test_n90_corrects_near_integer_boundaries() -> None:
     assert 1 - just_above > 0.1 and n90(just_above) == 2
     assert n90(0.9) == 1
     assert n90(0.1) == 22 and n90(0.5) == 4
+
+
+def test_n90_absurdly_small_p_returns_promptly() -> None:
+    start = time.perf_counter()
+    n = n90(1e-30)
+    assert time.perf_counter() - start < 0.5
+    assert n == pytest.approx(math.log(10) / 1e-30, rel=1e-9)
 
 
 def test_n90_tiny_p_reaches_ninety_percent() -> None:
