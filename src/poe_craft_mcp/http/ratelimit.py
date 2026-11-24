@@ -220,9 +220,9 @@ class RateLimiter:
     ) -> httpx.Response:
         """Wait for room under `kind`'s policy, then send.
 
-        Raises `RateLimited` instead of waiting (for the queue or for the limits) past
-        `deadline` (default `max_wait_s` from now), on 429, or when a 429 hit the queue
-        while this call was waiting.
+        Raises `RateLimited` instead of waiting (for the queue, for the limits or for the
+        response) past `deadline` (default `max_wait_s` from now), on 429, or when a 429 hit
+        the queue while this call was waiting.
         """
         deadline = self.deadline() if deadline is None else deadline
         epoch = self._pause_epoch
@@ -238,10 +238,18 @@ class RateLimiter:
                 raise RateLimited(wait, f"{kind} would wait {wait:.1f}s")
             if wait > 0:
                 await self.sleep(wait)
+            if deadline - self.clock() <= 0:
+                raise RateLimited(self.wait_for(kind), f"{kind} deadline reached before sending")
             sent_at = self.clock()
             for policy in self._policies_for(kind):
                 policy.record(sent_at)
-            response = await send()
+            try:
+                response = await asyncio.wait_for(send(), max(0.0, deadline - self.clock()))
+            except TimeoutError:
+                # The hit stays recorded: the request may have reached the server.
+                raise RateLimited(
+                    self.wait_for(kind), f"{kind} request ran past deadline"
+                ) from None
             self._observe(kind, response)
             if response.status_code == 429:
                 now = self.clock()
