@@ -14,10 +14,14 @@ from datetime import UTC, datetime
 from typing import Any
 from urllib.parse import quote
 
-from poe_craft_mcp.clients.ninja import get_ninja
+from poe_craft_mcp.clients.ninja import get_ninja, rates_from
 from poe_craft_mcp.clients.ninja_models import League, NinjaError, divine_chaos
-from poe_craft_mcp.clients.trade import RateLimited, TradeError, get_trade
-from poe_craft_mcp.clients.trade_models import parse_saved_url
+from poe_craft_mcp.clients.trade import RateLimited, TradeClient, TradeError, get_trade
+from poe_craft_mcp.clients.trade_models import (
+    STATUS_INSTANT_BUYOUT,
+    parse_saved_url,
+    query_from_body,
+)
 from poe_craft_mcp.context import AppContext
 from poe_craft_mcp.engine.pricing import summarize
 from poe_craft_mcp.engine.types import Listing, Source
@@ -96,6 +100,21 @@ def to_listings(raw: list[dict[str, Any]]) -> list[Listing]:
     return listings
 
 
+async def wants_instant_buyout(trade: TradeClient, target: str | dict[str, Any]) -> bool:
+    """True when a search query itself filters on instant buyout (`status: securable`), so
+    pricing keeps that filter instead of widening it to every online listing."""
+    if isinstance(target, str):
+        tq = await trade.resolve_saved_url(target)
+    else:
+        tq = query_from_body(target, "search")
+    status = tq.query.get("status")
+    return (
+        tq.kind == "search"
+        and isinstance(status, dict)
+        and status.get("option") == STATUS_INSTANT_BUYOUT
+    )
+
+
 async def price_outcome(
     ctx: AppContext,
     *,
@@ -107,9 +126,10 @@ async def price_outcome(
     """Price the item matched by a saved trade URL or a trade query JSON (exactly one).
 
     `sample` (default `config.trade_sample`, clamped to 1..100) is how many of the cheapest
-    online listings are used. `league` defaults to poe.ninja's current league; a trade URL's
-    own league is ignored. Raises `ValueError` for bad arguments and `PricingUnavailable`
-    when rates or listings cannot be had (rate limited or failed with nothing cached).
+    online listings are used (instant-buyout only when the query's status asks for it).
+    `league` defaults to poe.ninja's current league; a trade URL's own league is ignored.
+    Raises `ValueError` for bad arguments and `PricingUnavailable` when rates or listings
+    cannot be had (rate limited or failed with nothing cached).
     """
     target: str | dict[str, Any]
     if trade_url is not None and query_json is None:
@@ -126,16 +146,18 @@ async def price_outcome(
     try:
         resolved = await ninja.current_league() if league is None else League(league, league)
         currency = await ninja.dataset("Currency", resolved)
-        rates = await ninja.currency_rates(resolved)
     except (FetchError, NinjaError) as exc:
         raise PricingUnavailable(f"poe.ninja currency rates unavailable: {exc}") from None
+    rates = rates_from(currency.rows)
     try:
         per_divine: float | None = divine_chaos(currency.rows)
     except NinjaError:
         per_divine = None
 
     try:
-        found = await get_trade(ctx).listings_for(resolved.id, target, n)
+        trade = get_trade(ctx)
+        instant = await wants_instant_buyout(trade, target)
+        found = await trade.listings_for(resolved.id, target, n, instant_buyout=instant)
     except RateLimited as exc:
         raise PricingUnavailable(str(exc), exc.retry_after) from None
     except TradeError as exc:
@@ -152,6 +174,7 @@ async def price_outcome(
         search_id=search_id,
         league=resolved.id,
         from_cache=found["from_cache"],
+        instant_buyout=instant,
     )
     ninja_sources = currency.sources() if league is None else [currency.source()]
     sources = [*ninja_sources, trade_source]

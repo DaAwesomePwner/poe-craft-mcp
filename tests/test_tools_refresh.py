@@ -1,7 +1,7 @@
 # ruff: noqa: F811, F401  (fixtures are re-used from test_ninja)
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from test_ninja import INTERVAL, NinjaApi, api, ctx
 from test_tools_prices import call, session
@@ -78,3 +78,54 @@ async def test_refresh_reports_per_dataset_errors(ctx: AppContext, api: NinjaApi
         data = await call(client, "refresh")
     assert data["refreshed"] is True and "Currency" not in data["datasets"]
     assert "HTTP 503" in data["errors"]["Currency"]
+
+
+def essence(data: dict[str, Any]) -> dict[str, Any]:
+    return next(src for src in data["sources"] if src["name"] == "poe.ninja Essence")
+
+
+async def test_forced_404_hides_the_removed_type_from_ordinary_reads(
+    ctx: AppContext, api: NinjaApi, clock: FakeClock
+) -> None:
+    async with session(ctx) as client:
+        await call(client, "get_prices", category="Essence")
+        clock.advance(60)
+        api.fail("Essence", 404)
+        refreshed = await call(client, "refresh")
+        assert refreshed["datasets"]["Essence"]["age_seconds"] is None
+        hits = api.hits("Essence")
+        data = await call(client, "get_prices", category="Essence")
+    assert data["rows"] == [] and "no rows" in data["hint"]
+    assert api.hits("Essence") == hits
+
+
+async def test_forced_503_keeps_the_cached_copy_flagged_stale(
+    ctx: AppContext, api: NinjaApi, clock: FakeClock
+) -> None:
+    async with session(ctx) as client:
+        await call(client, "get_prices", category="Essence")
+        clock.advance(60)
+        api.fail("Essence", 503)
+        refreshed = await call(client, "refresh")
+        assert refreshed["datasets"]["Essence"]["stale"] is True
+        hits = api.hits("Essence")
+        data = await call(client, "get_prices", category="Essence")
+    assert data["total_rows"] == 6 and essence(data)["stale"] is True
+    assert api.hits("Essence") == hits
+
+
+async def test_forced_failure_backs_off_for_the_full_interval(
+    ctx: AppContext, api: NinjaApi, clock: FakeClock
+) -> None:
+    async with session(ctx) as client:
+        await call(client, "get_prices", category="Essence")
+        clock.advance(INTERVAL + 10)  # expired, not yet re-read
+        api.fail("Essence", 503)
+        await call(client, "refresh")
+        hits = api.hits("Essence")
+        clock.advance(61)  # past CachedHttpClient's 60 s minimum backoff
+        early = await call(client, "get_prices", category="Essence")
+        assert api.hits("Essence") == hits and essence(early)["stale"] is True
+        clock.advance(INTERVAL)
+        await call(client, "get_prices", category="Essence")
+        assert api.hits("Essence") == hits + 1

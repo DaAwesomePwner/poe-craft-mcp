@@ -1,6 +1,7 @@
 # ruff: noqa: F811, F401  (fixtures are re-used from test_ninja and test_trade_pricing)
 from __future__ import annotations
 
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from test_ninja import NinjaApi, api, ctx
@@ -9,6 +10,7 @@ from test_trade import SAVED_URL, SEARCH, FakeSleep
 from test_trade_pricing import mock_trade, no_keyring, trade
 
 from poe_craft_mcp.clients.trade import TradeClient
+from poe_craft_mcp.config import Config
 from poe_craft_mcp.context import AppContext
 from poe_craft_mcp.http.ratelimit import RateLimiter
 
@@ -99,3 +101,20 @@ async def test_status_reports_limiter_only_after_trade_use(
     limits = after["trade_rate_limit"]
     assert set(limits) == {"paused_until", "kinds", "policies"}
     assert "trade-search-request-limit" in limits["policies"]
+
+
+async def test_omitted_sample_uses_configured_trade_sample(
+    tmp_path: Path, api: NinjaApi, clock: FakeClock
+) -> None:
+    ctx = AppContext.create(Config(data_dir=tmp_path / "data", trade_sample=10), clock=clock)
+    limiter = RateLimiter(clock=clock, sleep=FakeSleep(clock))
+    ctx.services["trade"] = TradeClient(
+        ctx.config, ctx.cache, limiter=limiter, poesessid=lambda: None
+    )
+    _, fetch = mock_trade(api)
+    try:
+        async with session(ctx) as client:
+            data = await call(client, "price_trade_query", trade_url=SAVED_URL)
+    finally:
+        await ctx.aclose()
+    assert data["sample"] == 10 and fetch.call_count == 1

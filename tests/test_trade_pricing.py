@@ -1,6 +1,7 @@
 # ruff: noqa: F811, F401  (fixtures are re-used from test_ninja)
 from __future__ import annotations
 
+import dataclasses
 import json
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
@@ -9,9 +10,10 @@ import httpx
 import pytest
 import respx
 from test_ninja import NinjaApi, api, ctx
-from test_trade import SAVED_URL, SEARCH, FakeSleep, recorded
+from test_trade import SAVED_URL, SEARCH, FakeSleep, blob, recorded
 
 from poe_craft_mcp import secrets
+from poe_craft_mcp.clients.ninja import get_ninja
 from poe_craft_mcp.clients.trade import TradeClient
 from poe_craft_mcp.context import AppContext
 from poe_craft_mcp.http.ratelimit import RateLimiter
@@ -186,3 +188,47 @@ def test_parse_indexed() -> None:
     assert parse_indexed("2026-11-22T09:42:11Z") == datetime(2026, 11, 22, 9, 42, 11, tzinfo=UTC)
     assert parse_indexed("2026-11-22T09:42:11").tzinfo is UTC  # type: ignore[union-attr]
     assert parse_indexed("garbage") is None and parse_indexed(None) is None
+
+
+SECURABLE = {"query": {"type": "Simple Robe", "status": {"option": "securable"}}}
+
+
+@pytest.mark.parametrize(
+    "target",
+    [
+        {"query_json": SECURABLE},
+        {"trade_url": f"{TRADE}/trade/search/Settlers/{blob(json.dumps(SECURABLE).encode())}"},
+    ],
+)
+async def test_instant_buyout_status_in_the_query_is_kept(
+    ctx: AppContext, api: NinjaApi, trade: TradeClient, target: dict[str, Any]
+) -> None:
+    search, _ = mock_trade(api)
+    price = await price_outcome(ctx, sample=10, **target)
+    body = json.loads(search.calls.last.request.content)
+    assert body["query"]["status"] == {"option": "securable"}
+    assert price.sources[-1]["instant_buyout"] is True
+
+
+async def test_rates_and_divine_come_from_one_currency_snapshot(
+    ctx: AppContext, api: NinjaApi, trade: TradeClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ninja = get_ninja(ctx)
+    real = ninja.dataset
+    reads: list[Any] = []
+
+    async def shifting(category: str, league: Any = None, **kwargs: Any) -> Any:
+        ds = await real(category, league, **kwargs)
+        if ds.type != "Currency":
+            return ds
+        reads.append(ds)
+        if len(reads) == 1:
+            return ds
+        rows = [{**r, "chaos": 200.0} if r["id"] == "divine" else r for r in ds.rows]
+        return dataclasses.replace(ds, rows=rows)  # a refresh landed between two reads
+
+    monkeypatch.setattr(ninja, "dataset", shifting)
+    mock_trade(api, fetch=fetch_body([(1, "divine")]))
+    price = await price_outcome(ctx, query_json={"type": "Simple Robe"}, sample=1)
+    assert len(reads) == 1
+    assert price.median == price.chaos_per_divine == 195.0

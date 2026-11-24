@@ -44,16 +44,17 @@ def register(server: MCPServer, ctx: AppContext) -> None:
     async def price_trade_query(
         trade_url: str | None = None,
         query_json: dict[str, Any] | None = None,
-        sample: int = 30,
+        sample: int | None = None,
     ) -> dict[str, Any]:
         """Price an item from the pathofexile.com trade site (current poe.ninja league).
 
         Pass exactly one of `trade_url` (a saved /trade/search or /trade/exchange URL; its
         league is replaced by the current one) or `query_json` (a trade search body).
-        Uses the `sample` cheapest online listings (1-100), converted to chaos with poe.ninja
-        rates; outliers and unknown currencies are dropped. Returns p10/p25/median in chaos
-        (plus divine equivalents), counts and the currency mix. `stale: true` means old
-        cached listings were served because the trade site is rate limiting.
+        Uses the `sample` cheapest online listings (1-100, default from config; instant
+        buyout only if the query asks for it), converted to chaos with poe.ninja rates;
+        outliers and unknown currencies are dropped. Returns p10/p25/median in chaos (plus
+        divine equivalents), counts and the currency mix. `stale: true` means old cached
+        listings were served because the trade site is rate limiting.
         """
         try:
             price = await price_outcome(

@@ -57,6 +57,7 @@ class NinjaClient:
         re-requests) and, when a cached copy exists, served from it as stale data.
 
         `force` revalidates now instead of honouring the minimum interval (ETags still apply).
+        A failed forced fetch is remembered for the full interval like any other failure.
         """
         key = cache_key(url, params)
         known = self._failures.get(key)
@@ -65,18 +66,33 @@ class NinjaClient:
             try:
                 result = await self.ctx.http.get_json(url, params, min_interval_s=interval)
             except FetchError as exc:
-                if exc.status is None or exc.status >= 500 or exc.status == 429:
-                    raise  # CachedHttpClient already backs these off
-                known = (self.ctx.cache.clock() + self._interval_s, exc)
-                self._failures[key] = known
+                transient = exc.status is None or exc.status >= 500 or exc.status == 429
+                if transient and not force:
+                    raise  # CachedHttpClient already backs these off for the full interval
+                known = self._remember_failure(key, exc)
+                if transient:
+                    raise
             else:
-                self._failures.pop(key, None)
+                if force and result.stale:  # CachedHttpClient's backoff was sized for interval 0
+                    self._remember_failure(key, FetchError(key, "forced refresh failed"))
+                else:
+                    self._failures.pop(key, None)
                 return result
         cached = await self.ctx.cache.get(key)
         if cached is not None and known[1].status != 404:
             log.warning("GET %s failed (%s); serving cached copy", key, known[1].reason)
             return FetchResult(cached.json(), cached.age_seconds, True, True, key)
         raise known[1]
+
+    def _remember_failure(self, key: str, exc: FetchError) -> tuple[float, FetchError]:
+        backoff = max(self._interval_s, self.ctx.http.failure_backoff_s)
+        known = (self.ctx.cache.clock() + backoff, exc)
+        self._failures[key] = known
+        return known
+
+    def _failing(self, key: str) -> bool:
+        known = self._failures.get(key)
+        return known is not None and self.ctx.cache.clock() < known[0]
 
     async def current_league(self, *, force: bool = False) -> League:
         """`config.league` if explicit (name looked up best-effort), else the first league."""
@@ -132,6 +148,7 @@ class NinjaClient:
             and memo is not None
             and same_body
             and peek.age_seconds < self._interval_s
+            and not self._failing(key)
         ):
             return self._ready(base, memo[1], peek.age_seconds, False, peek_version)
         try:
@@ -257,10 +274,7 @@ class NinjaClient:
         so no translation table is needed; ids the trade site does not know are harmless.
         `chaos` is always 1.0.
         """
-        rows = (await self.dataset("Currency", league)).rows
-        rates = {r["id"]: float(r["chaos"]) for r in rows if r["chaos"]}
-        rates["chaos"] = 1.0
-        return rates
+        return rates_from((await self.dataset("Currency", league)).rows)
 
     async def price(self, category: str, name_or_id: str) -> Row | None:
         """Quote for one item: the row plus `source` {type, id, age_seconds, stale, url}.
@@ -286,6 +300,13 @@ class NinjaClient:
             return None
         await self.record(ds, [row])
         return quote(row, ds)
+
+
+def rates_from(currency_rows: list[Row]) -> dict[str, float]:
+    """Chaos per unit keyed by trade currency id, from `Currency` rows (see `currency_rates`)."""
+    rates = {r["id"]: float(r["chaos"]) for r in currency_rows if r["chaos"]}
+    rates["chaos"] = 1.0
+    return rates
 
 
 def quote(row: Row, ds: Dataset) -> Row:
