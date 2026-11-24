@@ -13,7 +13,7 @@ import pytest
 import respx
 
 from poe_craft_mcp.clients.trade import NotCached, RateLimited, TradeClient, TradeError, get_trade
-from poe_craft_mcp.clients.trade_models import decode_search_id, parse_saved_url
+from poe_craft_mcp.clients.trade_models import decode_search_id, parse_saved_url, query_hash
 from poe_craft_mcp.config import Config
 from poe_craft_mcp.context import AppContext
 from poe_craft_mcp.http.cache import ResponseCache
@@ -89,9 +89,10 @@ async def test_saved_url_decodes_locally_and_swaps_league(trade: TradeClient) ->
     result = await trade.listings_for("Covens", SAVED_URL, sample=10)
     sent = json.loads(search.calls.last.request.content)
     assert sent["query"]["name"] == "Tabula Rasa"
-    assert sent["query"]["status"] == {"option": "online"}
+    assert sent["query"]["status"] == {"option": "securable"}  # the saved URL says online
     assert sent["sort"] == {"price": "asc"}
     assert result["total"] == 356 and result["search_id"] == SEARCH["id"]
+    assert result["dropped_not_instant_buyout"] == 0
 
 
 @respx.mock
@@ -120,17 +121,17 @@ async def test_missing_saved_search_raises_trade_error(trade: TradeClient) -> No
 async def test_fetch_batches_of_ten_and_normalizes(trade: TradeClient, config: Config) -> None:
     _, fetch = mock_search_and_fetch()
     ids = [f"id{i}" for i in range(25)]
-    listings = await trade.fetch(ids, "Q1")
+    listings, not_buyout, unpriced = await trade.fetch(ids, "Q1")
     assert fetch.call_count == 3
     batches = [call.request.url.path.rsplit("/", 1)[1].split(",") for call in fetch.calls]
     assert [len(b) for b in batches] == [10, 10, 5]
     assert all(call.request.url.params["query"] == "Q1" for call in fetch.calls)
     assert all(c.request.headers["User-Agent"] == config.user_agent for c in fetch.calls)
     assert all("Cookie" not in call.request.headers for call in fetch.calls)
-    assert len(listings) == 30
+    assert (len(listings), not_buyout, unpriced) == (30, 0, 0)
     first = listings[0]
-    assert set(first) == {"id", "amount", "currency", "indexed", "account_online", "stack_size"}
-    assert (first["amount"], first["currency"], first["account_online"]) == (5.0, "chaos", True)
+    assert set(first) == {"id", "amount", "currency", "indexed", "stack_size"}
+    assert (first["amount"], first["currency"]) == (5.0, "chaos")
     assert "account0" not in json.dumps(listings)
 
 
@@ -162,25 +163,78 @@ async def test_rate_limited_falls_back_to_stale_cache(trade: TradeClient, clock:
         await trade.listings_for("Standard", SAVED_URL, sample=10)
 
 
+@pytest.mark.parametrize("status", [None, "online", "any", "securable"])
+@pytest.mark.parametrize("as_url", [False, True])
 @respx.mock
-async def test_exchange_offers_priced_per_unit(trade: TradeClient) -> None:
-    route = respx.post(f"{BASE}/api/trade/exchange/Covens").mock(return_value=recorded("exchange"))
-    result = await trade.exchange("Covens", want=["divine"], have=["chaos"])
-    body = json.loads(route.calls.last.request.content)
-    assert body["query"] == {"status": {"option": "online"}, "want": ["divine"], "have": ["chaos"]}
-    assert result["total"] == 9 and len(result["listings"]) == 9
-    amounts = [o["amount"] for o in result["listings"]]
-    assert amounts == sorted(amounts) and result["listings"][0]["currency"] == "chaos"
-    assert all(o["stack_size"] for o in result["listings"])
-
-
-@respx.mock
-async def test_instant_buyout_sets_securable_status(trade: TradeClient) -> None:
+async def test_every_search_is_forced_to_instant_buyout(
+    trade: TradeClient, status: str | None, as_url: bool
+) -> None:
     search, _ = mock_search_and_fetch()
-    await trade.listings_for("Covens", {"query": {"type": "Simple Robe"}}, instant_buyout=True)
-    assert json.loads(search.calls.last.request.content)["query"]["status"] == {
-        "option": "securable"
-    }
+    query: dict[str, Any] = {"type": "Simple Robe"}
+    if status is not None:
+        query["status"] = {"option": status}
+    target: str | dict[str, Any] = {"query": query}
+    if as_url:
+        target = f"{BASE}/trade/search/Settlers/{blob(json.dumps(target).encode())}"
+    await trade.listings_for("Covens", target, sample=10)
+    sent = json.loads(search.calls.last.request.content)
+    assert sent["query"] == {"type": "Simple Robe", "status": {"option": "securable"}}
+
+
+@respx.mock
+async def test_cache_key_follows_the_forced_status(
+    trade: TradeClient, cache: ResponseCache
+) -> None:
+    search, fetch = mock_search_and_fetch()
+    query = {"type": "Simple Robe", "status": {"option": "online"}}
+    legacy = query_hash("search", query, True, False, 10)  # the old online-only key
+    stale_whispers = {"listings": [{"amount": 1.0}], "total": 1, "search_id": "old"}
+    await cache.put(f"trade://listings/Covens/{legacy}", json.dumps(stale_whispers))
+    first = await trade.listings_for("Covens", {"query": query}, sample=10)
+    assert (first["from_cache"], first["search_id"], search.call_count) == (False, SEARCH["id"], 1)
+    # Queries differing only in status send the same securable search, so they share a key.
+    for status in ("any", "securable"):
+        again = {"query": {**query, "status": {"option": status}}}
+        assert (await trade.listings_for("Covens", again, sample=10))["from_cache"] is True
+    assert (search.call_count, fetch.call_count) == (1, 1)
+
+
+@respx.mock
+async def test_listings_without_the_buyout_fee_are_dropped_and_counted(
+    trade: TradeClient,
+) -> None:
+    body = fixture("fetch")["body"]
+    for entry in body["result"][:3]:
+        del entry["listing"]["fee"]
+        entry["listing"]["whisper"] = "@someone Hi, I would like to buy your item"
+    body["result"][3]["listing"]["fee"] = None
+    respx.post(f"{BASE}/api/trade/search/Covens").mock(return_value=recorded("search"))
+    respx.get(url__startswith=f"{BASE}/api/trade/fetch/").respond(200, json=body)
+    result = await trade.listings_for("Covens", SAVED_URL, sample=10)
+    assert (len(result["listings"]), result["dropped_not_instant_buyout"]) == (6, 4)
+    kept = {listing["id"] for listing in result["listings"]}
+    assert kept == {entry["id"] for entry in body["result"][4:]}
+    cached = await trade.listings_for("Covens", SAVED_URL, sample=10)
+    assert (cached["from_cache"], cached["dropped_not_instant_buyout"]) == (True, 4)
+
+
+@respx.mock
+async def test_mixed_batch_counts_each_drop_and_keeps_the_buyout(trade: TradeClient) -> None:
+    buyout, unpriced_whisper, bad_whisper, unpriced_buyout = (
+        json.loads(json.dumps(e)) for e in fixture("fetch")["body"]["result"][:4]
+    )
+    del unpriced_whisper["listing"]["fee"]
+    del unpriced_whisper["listing"]["price"]
+    del bad_whisper["listing"]["fee"]
+    bad_whisper["listing"]["price"] = {"type": "~price", "amount": "five", "currency": "chaos"}
+    unpriced_buyout["listing"]["price"]["amount"] = "lots"
+    batch = [buyout, unpriced_whisper, bad_whisper, None, unpriced_buyout]
+    respx.post(f"{BASE}/api/trade/search/Covens").mock(return_value=recorded("search"))
+    respx.get(url__startswith=f"{BASE}/api/trade/fetch/").respond(200, json={"result": batch})
+    result = await trade.listings_for("Covens", SAVED_URL, sample=5)
+    assert [listing["id"] for listing in result["listings"]] == [buyout["id"]]
+    assert result["listings"][0]["amount"] == 5.0
+    assert (result["dropped_not_instant_buyout"], result["dropped_unpriced"]) == (2, 2)
 
 
 @respx.mock
@@ -330,18 +384,17 @@ async def test_saved_descending_sort_is_forced_ascending(trade: TradeClient) -> 
 
 
 @respx.mock
-async def test_exchange_url_prices_bulk_and_rejects_instant_buyout(trade: TradeClient) -> None:
-    query = {"status": {"option": "online"}, "have": ["chaos"], "want": ["divine"]}
-    url = f"{BASE}/trade/exchange/Covens/{blob(json.dumps(query).encode())}"
-    route = respx.post(f"{BASE}/api/trade/exchange/Covens").mock(return_value=recorded("exchange"))
-    with pytest.raises(ValueError, match="instant_buyout"):
-        await trade.listings_for("Covens", url, instant_buyout=True)
-    assert not route.called
-    result = await trade.listings_for("Covens", url, sample=3)
-    sent = json.loads(route.calls.last.request.content)
-    assert (sent["query"]["want"], sent["query"]["have"]) == (["divine"], ["chaos"])
-    assert sent["sort"] == {"have": "asc"}
-    assert len(result["listings"]) == 3 and result["total"] == 9
+async def test_exchange_urls_are_refused_without_a_request(trade: TradeClient) -> None:
+    query = {"status": {"option": "securable"}, "have": ["chaos"], "want": ["divine"]}
+    decodable = f"{BASE}/trade/exchange/Covens/{blob(json.dumps(query).encode())}"
+    opaque = f"{BASE}/trade/exchange/Covens/Ab12Cd"
+    anything = respx.route().respond(500)
+    for url in (decodable, opaque):
+        with pytest.raises(ValueError, match="exchange listings are whisper-based"):
+            await trade.listings_for("Covens", url, sample=3)
+        with pytest.raises(ValueError, match="use an item search"):
+            await trade.listings_for("Covens", url, sample=3, cache_only=True)
+    assert not anything.called
 
 
 @pytest.mark.parametrize(

@@ -1,6 +1,7 @@
 # ruff: noqa: F811, F401  (fixtures are re-used from test_ninja and test_trade_pricing)
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -38,6 +39,8 @@ async def test_price_trade_query_envelope(
     assert data["dropped_unknown_currency"] == {} and data["currency_mix"] == {"chaos": 10}
     assert (data["total"], data["search_id"], data["stale"]) == (356, SEARCH["id"], False)
     assert data["sample"] == 10 and data["league"] == "Covens"
+    assert data["dropped_not_instant_buyout"] == 0
+    assert data["sources"][2]["instant_buyout"] is True
     assert "cheapest_listing_age_seconds" in data
     assert data["data_age_seconds"] == 0.0
     assert [s["name"] for s in data["sources"]] == [
@@ -81,6 +84,31 @@ async def test_price_trade_query_needs_exactly_one_input(ctx: AppContext) -> Non
         )
     for result in (neither, both):
         assert result.is_error and "exactly one" in str(result.content)
+
+
+async def test_price_trade_query_forces_instant_buyout(
+    ctx: AppContext, api: NinjaApi, trade: TradeClient
+) -> None:
+    search, _ = mock_trade(api)
+    body = {"query": {"type": "Simple Robe", "status": {"option": "online"}}}
+    async with session(ctx) as client:
+        data = await call(client, "price_trade_query", query_json=body, sample=10)
+    sent = json.loads(search.calls.last.request.content)
+    assert sent["query"]["status"] == {"option": "securable"}
+    assert data["sources"][2]["instant_buyout"] is True
+
+
+async def test_price_trade_query_refuses_exchange_urls(
+    ctx: AppContext, api: NinjaApi, trade: TradeClient
+) -> None:
+    search, fetch = mock_trade(api)
+    async with session(ctx) as client:
+        result = await client.call_tool(
+            "price_trade_query",
+            {"trade_url": "https://www.pathofexile.com/trade/exchange/Covens/Ab12Cd"},
+        )
+    assert result.is_error and "exchange listings are whisper-based" in str(result.content)
+    assert (search.call_count, fetch.call_count) == (0, 0)
 
 
 async def test_status_reports_limiter_only_after_trade_use(

@@ -21,6 +21,10 @@ reversed, rewrite its line and note what it replaces.
 - `fixed_chaos` and `use_salvage` outcomes are failure values only; a successful sale must be priced by `trade_url`, and a recipe without one (or with its sale price overridden) is evaluated but never ranked. Why: never rank a craft on an asserted sale price with no live listings behind it. (2026-11-24, v1 build, phase 3)
 - A recipe step repeats only when it has `repeat_until`; `p_success` without it is ignored with a warning and the step is paid once. Why: a one-shot step must not be costed as a repeated one. (2026-11-24, v1 build, phase 3)
 
+## Trade pricing
+
+- Trade prices and liquidity use only instant-buyout (asynchronous trade) listings; whisper listings are never used. Why: whisper prices are unreliable (anyone can list and ignore whispers) and whisper trades are never worth the time. (2026-11-24, starter recipes goal, P1)
+
 ## Profit engine
 
 - Success probabilities below 1e-12 are outside the supported range and raise a clear error. Why: the n90 calculation stays exact with a wide float margin down to 1e-12, while far smaller values eventually make adjacent attempt counts indistinguishable; no real craft is that rare. (2026-11-24, v1 build, phase 3)

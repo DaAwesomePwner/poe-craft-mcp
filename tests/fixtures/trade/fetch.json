@@ -24,16 +24,14 @@
       "amount": 5,
       "currency": "chaos"
      },
+     "fee": 2800,
      "account": {
       "name": "account0#0000",
-      "online": {
-       "league": "Covens"
-      },
+      "online": null,
       "lastCharacterName": "character0",
       "language": "en_US",
       "realm": "pc"
-     },
-     "whisper": "@character0 Hi, I would like to buy your Tabula Rasa Simple Robe listed for 5 chaos in Covens"
+     }
     },
     "item": {
      "verified": true,
@@ -63,16 +61,14 @@
       "amount": 5,
       "currency": "chaos"
      },
+     "fee": 2840,
      "account": {
       "name": "account1#0000",
-      "online": {
-       "league": "Covens"
-      },
+      "online": null,
       "lastCharacterName": "character1",
       "language": "en_US",
       "realm": "pc"
-     },
-     "whisper": "@character1 Hi, I would like to buy your Tabula Rasa Simple Robe listed for 5 chaos in Covens"
+     }
     },
     "item": {
      "verified": true,
@@ -102,16 +98,14 @@
       "amount": 5,
       "currency": "chaos"
      },
+     "fee": 2880,
      "account": {
       "name": "account2#0000",
-      "online": {
-       "league": "Covens"
-      },
+      "online": null,
       "lastCharacterName": "character2",
       "language": "en_US",
       "realm": "pc"
-     },
-     "whisper": "@character2 Hi, I would like to buy your Tabula Rasa Simple Robe listed for 5 chaos in Covens"
+     }
     },
     "item": {
      "verified": true,
@@ -141,17 +135,14 @@
       "amount": 5,
       "currency": "chaos"
      },
+     "fee": 2920,
      "account": {
       "name": "account3#0000",
-      "online": {
-       "league": "Covens",
-       "status": "afk"
-      },
+      "online": null,
       "lastCharacterName": "character3",
       "language": "en_US",
       "realm": "pc"
-     },
-     "whisper": "@character3 Hi, I would like to buy your Tabula Rasa Simple Robe listed for 5 chaos in Covens"
+     }
     },
     "item": {
      "verified": true,
@@ -181,16 +172,14 @@
       "amount": 5,
       "currency": "chaos"
      },
+     "fee": 2960,
      "account": {
       "name": "account4#0000",
-      "online": {
-       "league": "Covens"
-      },
+      "online": null,
       "lastCharacterName": "character4",
       "language": "ko_KR",
       "realm": "pc"
-     },
-     "whisper": "@character4 Hi, I would like to buy your Tabula Rasa Simple Robe listed for 5 chaos in Covens"
+     }
     },
     "item": {
      "verified": true,
@@ -220,16 +209,14 @@
       "amount": 5,
       "currency": "chaos"
      },
+     "fee": 3000,
      "account": {
       "name": "account5#0000",
-      "online": {
-       "league": "Covens"
-      },
+      "online": null,
       "lastCharacterName": "character5",
       "language": "en_US",
       "realm": "pc"
-     },
-     "whisper": "@character5 Hi, I would like to buy your Tabula Rasa Simple Robe listed for 5 chaos in Covens"
+     }
     },
     "item": {
      "verified": true,
@@ -259,16 +246,14 @@
       "amount": 5,
       "currency": "chaos"
      },
+     "fee": 3040,
      "account": {
       "name": "account6#0000",
-      "online": {
-       "league": "Covens"
-      },
+      "online": null,
       "lastCharacterName": "character6",
       "language": "en_US",
       "realm": "pc"
-     },
-     "whisper": "@character6 Hi, I would like to buy your Tabula Rasa Simple Robe listed for 5 chaos in Covens"
+     }
     },
     "item": {
      "verified": true,
@@ -298,16 +283,14 @@
       "amount": 5,
       "currency": "chaos"
      },
+     "fee": 3080,
      "account": {
       "name": "account7#0000",
-      "online": {
-       "league": "Covens"
-      },
+      "online": null,
       "lastCharacterName": "character7",
       "language": "en_US",
       "realm": "pc"
-     },
-     "whisper": "@character7 Hi, I would like to buy your Tabula Rasa Simple Robe listed for 5 chaos in Covens"
+     }
     },
     "item": {
      "verified": true,
@@ -337,17 +320,14 @@
       "amount": 6,
       "currency": "chaos"
      },
+     "fee": 3120,
      "account": {
       "name": "account8#0000",
-      "online": {
-       "league": "Covens",
-       "status": "afk"
-      },
+      "online": null,
       "lastCharacterName": "character8",
       "language": "en_US",
       "realm": "pc"
-     },
-     "whisper": "@character8 Hi, I would like to buy your Tabula Rasa Simple Robe listed for 6 chaos in Covens"
+     }
     },
     "item": {
      "verified": true,
@@ -377,16 +357,14 @@
       "amount": 6,
       "currency": "chaos"
      },
+     "fee": 3160,
      "account": {
       "name": "account9#0000",
-      "online": {
-       "league": "Covens"
-      },
+      "online": null,
       "lastCharacterName": "character9",
       "language": "en_US",
       "realm": "pc"
-     },
-     "whisper": "@character9 Hi, I would like to buy your Tabula Rasa Simple Robe listed for 6 chaos in Covens"
+     }
     },
     "item": {
      "verified": true,

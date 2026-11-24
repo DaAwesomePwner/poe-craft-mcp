@@ -157,8 +157,8 @@ unverified recipes, or a sale with too few listings). That is expected.
    set `status: verified` and `verified_patch: "3.30.0"` (quoted). It then ranks by default.
 
 Every number comes with its source and age (`data_age_seconds`). Rankings sort by expected
-profit per hour: the price of each outcome is the 25th percentile of its trade listings minus a
-5% undercut, and risk `low` keeps crafts whose bad-luck cost (C90, the 90th-percentile number
+profit per hour: the price of each outcome is the 25th percentile of its instant-buyout trade
+listings minus a 5% undercut, and risk `low` keeps crafts whose bad-luck cost (C90, the 90th-percentile number
 of attempts) still fits your budget.
 
 ## Tools
@@ -170,7 +170,7 @@ of attempts) still fits your budget.
 | `get_base_price(base, ilvl_min?, influence?)` | Cheapest poe.ninja BaseType row for a base | poe.ninja (cached) |
 | `list_recipes(max_budget_div?, tags?, include_unverified?)` | Browse recipes; unverified are hidden by default | none |
 | `get_recipe(id)` | One full recipe with its warnings | none |
-| `price_trade_query(trade_url? \| query_json?, sample?)` | p10 / p25 / median in chaos of the cheapest listings of a trade search | trade site (cached 20 min, rate limited) |
+| `price_trade_query(trade_url? \| query_json?, sample?)` | p10 / p25 / median in chaos of the cheapest instant-buyout listings of a trade search | trade site (cached 20 min, rate limited) |
 | `mod_odds(base, ilvl, target_mods, method)` | Chance per attempt for chaos, alt, essence or fossil crafting, from RePoE spawn weights, plus attempts for a 90% chance | none (needs game data) |
 | `evaluate_recipe(id, price_overrides?)` | Full cost / value / profit breakdown of one recipe, with every input's source and age | poe.ninja and trade |
 | `rank_crafts(budget_div, min_listings?, max_minutes?, risk="medium", limit=5, include_unverified?, tags?)` | Ranks recipes by profit per hour within a budget | poe.ninja and trade |
@@ -234,9 +234,15 @@ must be priced by a `trade_url`, or the recipe is evaluated but never ranked.
 (the same filters you would use to sell it), run it, and copy the address-bar URL:
 `https://www.pathofexile.com/trade/search/<league>/<id>`. Paste it into the recipe
 **unchanged**, league included: the server needs it to look up a saved search, and then swaps
-in the current league when it runs the search. Exchange searches (`/trade/exchange/...`) work
-too. If the URL contains the whole query, no extra request is needed to resolve it; otherwise
-the server fetches it once and caches it.
+in the current league when it runs the search. If the URL contains the whole query, no extra
+request is needed to resolve it; otherwise the server fetches it once and caches it.
+
+**Instant buyout only.** Every price and listing count comes from instant-buyout
+(asynchronous trade) listings: the server sends every search with status `securable`,
+whatever online/any status the URL was saved with, and drops any fetched listing that is not
+instant buyout. Whisper listings are never used, since anyone can list at any price and ignore
+whispers. Bulk exchange searches (`/trade/exchange/...`) only list whisper offers, so they are
+refused: use an item search instead.
 
 **Odds.** `p_success` can be a number from a guide (`p_source: guide`), your own record
 (`p_source: user`) or computed from mod weights (`p_source: weights`, same arguments as
@@ -258,7 +264,7 @@ key. The ones you are most likely to change:
 | `league` | `"auto"` | League id, or the current challenge league from poe.ninja |
 | `include_unverified` | `false` | Show and rank unverified recipes |
 | `undercut_pct` | `5` | Undercut applied to the 25th-percentile listing price |
-| `min_listings` | `10` | Outputs with fewer trade listings are dropped or flagged |
+| `min_listings` | `10` | Outputs with fewer instant-buyout trade listings are dropped or flagged (liquidity) |
 | `trade_cache_min` | `20` | Minutes a trade search result stays cached |
 | `ninja_min_interval_min` | `15` | Minimum minutes between refreshes of a poe.ninja dataset (15 or more) |
 | `data_dir` | `data/` | Where `cache.db`, `gamedata/` and `logs/` live |
