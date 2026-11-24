@@ -1,0 +1,32 @@
+# Placeholder example: structure is complete, numbers and URLs are NOT checked for 3.30.
+id: example-fossil-crafted-ring
+name: Fossil crafted ring (example)
+tags: [fossil, example]
+status: unverified
+verified_patch: null
+sources: ["https://example.com/fossil-guide"]
+requires: [delve]
+budget_div: 12
+base:
+  trade_url: "https://www.pathofexile.com/trade/search/<league>/<ring-base-search-id>"
+steps:
+  - action: fossil_roll
+    materials:
+      - { source: ninja, category: Fossil, name: "Pristine Fossil", qty: 1 }
+      - { source: ninja, category: Fossil, name: "Dense Fossil", qty: 1 }
+      - { source: ninja, category: Resonator, name: "Potent Chaotic Resonator", qty: 1 }
+    repeat_until: "two target modifiers present"
+    p_success: { p_source: guide, value: 0.04, source_url: "https://example.com/fossil-guide" }
+  - action: slam
+    materials:
+      - { source: ninja, category: Currency, name: "Exalted Orb", qty: 1 }
+outcomes:
+  - { name: "perfect slam", probability: 0.2, trade_url: "https://www.pathofexile.com/trade/search/<league>/<perfect-search-id>" }
+  - { name: "decent slam", probability: 0.3, trade_url: "https://www.pathofexile.com/trade/search/<league>/<decent-search-id>" }
+  - { name: "bad slam", probability: 0.5, use_salvage: true }
+salvage:
+  trade_url: "https://www.pathofexile.com/trade/search/<league>/<salvage-search-id>"
+minutes: 15
+notes: >-
+  Reroll with the fossil combination until both target modifiers are on the ring, then slam
+  an exalt. Replace the placeholder odds, fossils and trade URLs with your own.

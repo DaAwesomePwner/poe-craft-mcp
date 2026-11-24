@@ -1,0 +1,36 @@
+# Placeholder example: structure is complete, numbers and URLs are NOT checked for 3.30.
+id: example-essence-spam-body-armour
+name: Essence spam life body armour (example)
+tags: [essence, example]
+status: unverified
+verified_patch: null
+sources: ["https://example.com/essence-guide"]
+requires: []
+budget_div: 3
+base:
+  lookup: { source: ninja, type: BaseType, name: "Astral Plate", ilvl_min: 84 }
+steps:
+  - action: essence_spam
+    materials:
+      - { source: ninja, category: Essence, name: "Deafening Essence of Greed", qty: 1 }
+    repeat_until: "T1 life prefix guaranteed and a usable second mod"
+    p_success:
+      p_source: weights
+      method: "essence:greed"
+      target_mods: ["<mod id>"]
+      base: "Astral Plate"
+      ilvl: 84
+  - action: bench_craft
+    materials:
+      - { source: ninja, category: Currency, name: "Divine Orb", qty: 0.1 }
+      - { source: fixed, chaos: 2, label: "Bench crafting fee" }
+outcomes:
+  - { name: "good hit", probability: 0.25, trade_url: "https://www.pathofexile.com/trade/search/<league>/<good-hit-search-id>" }
+  - { name: "average hit", probability: 0.45, trade_url: "https://www.pathofexile.com/trade/search/<league>/<average-hit-search-id>" }
+  - { name: "brick", probability: 0.30, use_salvage: true }
+salvage:
+  fixed_chaos: 1
+minutes: 6
+notes: >-
+  Spam the essence until the guaranteed mod comes with a useful second mod, then finish with
+  a bench craft. Replace the placeholder mod id, probabilities and trade URLs with your own.
