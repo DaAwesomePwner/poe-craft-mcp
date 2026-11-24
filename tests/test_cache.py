@@ -67,3 +67,13 @@ async def test_concurrent_first_use_initializes_once(config: Config, clock: Fake
     await asyncio.gather(*(fresh.get(u) for u in urls), *(fresh.put(u, b"{}") for u in urls))
     hits = await asyncio.gather(*(fresh.get(u) for u in urls))
     assert all(hit is not None for hit in hits)
+
+
+async def test_fetched_at_reads_timestamps_only(cache: ResponseCache, clock: FakeClock) -> None:
+    assert await cache.fetched_at([]) == {}
+    await cache.put(URL, b"{}")
+    first = clock()
+    clock.advance(10)
+    await cache.put(URL + "?b", b"{}")
+    urls = [f"{URL}?missing={i}" for i in range(600)] + [URL + "?b", URL, URL]
+    assert await cache.fetched_at(urls) == {URL: first, URL + "?b": first + 10}

@@ -1,19 +1,25 @@
 # ruff: noqa: F811, F401  (fixtures are re-used from test_ninja)
 from __future__ import annotations
 
+import json
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+import pytest
 from mcp import Client
 from test_ninja import INTERVAL, NinjaApi, api, ctx, with_league
 
+from poe_craft_mcp import secrets
+from poe_craft_mcp.clients.ninja import NinjaClient
 from poe_craft_mcp.context import AppContext
 from poe_craft_mcp.server import build_server
 
 if TYPE_CHECKING:
     from conftest import FakeClock
+
+FAKE_SECRET = "fake-poesessid-status-0123456789"
 
 
 @asynccontextmanager
@@ -123,6 +129,11 @@ async def test_get_base_price_hit_and_miss(
         assert miss["sources"]
 
 
+@pytest.fixture(autouse=True)
+def no_keyring(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(secrets, "_from_keyring", lambda: None)
+
+
 async def test_league_status_fields_and_caching(
     ctx: AppContext,
     api: NinjaApi,
@@ -133,8 +144,9 @@ async def test_league_status_fields_and_caching(
         assert first["league"] == "Covens" and first["league_name"] == "Covens"
         assert first["chaos_per_divine"] == 195.0
         assert first["datasets"] == {"Currency": 0.0}
-        assert first["poesessid_set"] is None and first["trade_rate_limit"] is None
-        assert first["pending"] == ["poesessid_set", "trade_rate_limit"]
+        assert first["poesessid_set"] is False
+        assert first["trade_rate_limit"] == {"note": "no trade calls yet in this session"}
+        assert "pending" not in first
         assert {s["name"] for s in first["sources"]} == {"poe.ninja leagues", "poe.ninja Currency"}
         assert first["data_age_seconds"] == 0.0
         assert api.call_count == 2
@@ -150,6 +162,37 @@ async def test_league_status_fields_and_caching(
         assert api.call_count == 4
         assert all(call.headers.get("If-None-Match") for call in api.calls[2:])
         assert third["datasets"] == {"Currency": 0.0} and third["data_age_seconds"] == 0.0
+
+
+@pytest.mark.parametrize("configured", [True, False])
+async def test_league_status_reports_poesessid_without_its_value(
+    ctx: AppContext, monkeypatch: pytest.MonkeyPatch, configured: bool
+) -> None:
+    if configured:
+        monkeypatch.setenv("POESESSID", FAKE_SECRET)
+    async with session(ctx) as client:
+        status = await call(client, "get_league_status")
+    assert status["poesessid_set"] is configured
+    assert FAKE_SECRET not in json.dumps(status)
+
+
+async def test_league_status_reads_ages_without_loading_bodies(
+    ctx: AppContext, clock: FakeClock, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async with session(ctx) as client:
+        await call(client, "get_prices", category="Essence")
+    restarted = NinjaClient(ctx)  # a new process: nothing remembered in memory
+    clock.advance(30)
+    loaded: list[str] = []
+    real_get = ctx.cache.get
+
+    async def spy(url: str) -> Any:
+        loaded.append(url)
+        return await real_get(url)
+
+    monkeypatch.setattr(ctx.cache, "get", spy)
+    assert await restarted.cached_ages("Covens") == {"Essence": 30.0}
+    assert loaded == []
 
 
 async def test_league_status_lists_every_cached_dataset(

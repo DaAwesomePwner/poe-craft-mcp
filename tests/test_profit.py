@@ -1,4 +1,5 @@
 import math
+import time
 
 import pytest
 
@@ -163,11 +164,20 @@ def test_n90_corrects_near_integer_boundaries() -> None:
     assert n90(0.1) == 22 and n90(0.5) == 4
 
 
-def test_n90_tiny_p_reaches_ninety_percent() -> None:
-    p = 1e-16
+def test_n90_at_the_supported_floor_is_the_exact_smallest_n() -> None:
+    p = 1e-12
     n = n90(p)
     assert n * math.log1p(-p) <= math.log(0.1) < (n - 1) * math.log1p(-p)
     assert n == pytest.approx(math.log(10) / p, rel=1e-9)
+
+
+@pytest.mark.parametrize("p", [1e-13, 2.0**-64, 1e-30, 5e-324])
+def test_probability_below_supported_floor_is_rejected_promptly(p: float) -> None:
+    start = time.perf_counter()
+    for fn in (n90, expected_attempts):
+        with pytest.raises(ValueError, match="below 1e-12"):
+            fn(p)
+    assert time.perf_counter() - start < 0.5
 
 
 def test_salvage_applies_quantity() -> None:
@@ -196,3 +206,22 @@ def test_salvage_applies_quantity() -> None:
 def test_negative_or_non_finite_inputs_raise(override: dict[str, object]) -> None:
     with pytest.raises(ValueError):
         evaluate(worked_craft(**override))
+
+
+def test_failure_outcomes_can_carry_their_own_value() -> None:
+    craft = worked_craft(
+        outcomes=(
+            Outcome("hit", 0.5, p25=100, listing_count=40),
+            Outcome("bricked", 0.25, is_failure=True),
+            Outcome("lost", 0.25, is_failure=True, failure_value=0.0),
+        ),
+        salvage=mat("Salvage", 1, 4),
+    )
+    b = evaluate(craft)
+    assert [o.contribution for o in b.outcomes] == pytest.approx([47.5, 1.0, 0.0])
+    assert b.v == pytest.approx(48.5)
+    no_salvage = evaluate(worked_craft(outcomes=craft.outcomes, salvage=None))
+    assert no_salvage.v == pytest.approx(47.5)
+    assert no_salvage.warnings == ("no salvage price; failure outcome 'bricked' valued at 0",)
+    with pytest.raises(ValueError, match="failure_value"):
+        evaluate(worked_craft(outcomes=(Outcome("x", 1.0, is_failure=True, failure_value=-1),)))

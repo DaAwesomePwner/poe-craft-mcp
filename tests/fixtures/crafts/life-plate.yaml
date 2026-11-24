@@ -1,0 +1,20 @@
+id: life-plate
+name: Alteration life Astral Plate
+tags: [alteration]
+status: verified
+verified_patch: 3.30.0
+sources: ["https://example.com/guide"]
+base:
+  lookup: { source: ninja, type: BaseType, name: Astral Plate, ilvl_min: 85 }
+steps:
+  - action: alteration_spam
+    materials:
+      - { source: ninja, category: Currency, name: Orb of Alteration, qty: 1 }
+      - { source: fixed, chaos: 0.1, label: Augmentation }
+    repeat_until: life prefix
+    p_success: { p_source: user, value: 0.5 }
+outcomes:
+  - { name: life plate, probability: 0.9, trade_url: "https://www.pathofexile.com/trade/search/Settlers/H4sIAAAAAAAC_6tWKixNLapUslKoViqpLEgFMpQ8cwtSizITcxSc8suVdBSUiksSS4qBEtEIJYl5KSCZtMycktQisFxsbWwtSG1-UQnYsIKizGSI0uJkpdpaAO1AD55oAAAA" }
+  - { name: bricked, probability: 0.1, use_salvage: true }
+salvage: { fixed_chaos: 1 }
+minutes: 2

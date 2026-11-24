@@ -266,6 +266,40 @@ async def test_lock_wait_counts_against_deadline(limiter: RateLimiter, clock: Fa
     await holder
 
 
+async def test_slow_send_is_cut_off_at_the_deadline(limiter: RateLimiter, clock: FakeClock) -> None:
+    async def hang() -> httpx.Response:
+        await asyncio.sleep(30)
+        return httpx.Response(200)
+
+    loop = asyncio.get_running_loop()
+    started = loop.time()
+    with pytest.raises(RateLimited, match="ran past deadline"):
+        await limiter.run("search", hang, deadline=clock() + 0.05)
+    assert loop.time() - started < 5
+    assert not limiter._lock.locked()
+    # The cancelled request may have reached the server, so it still counts as sent.
+    assert limiter.policies["search"].last_sent is not None
+    assert (await limiter.run("fetch", reply())).status_code == 200
+
+
+async def test_deadline_reached_during_pacing_sleep_records_no_hit(
+    limiter: RateLimiter, clock: FakeClock
+) -> None:
+    await limiter.run("fetch", reply())  # bootstrap pacing: the next call waits 2 s
+    sent = False
+
+    async def send() -> httpx.Response:
+        nonlocal sent
+        sent = True
+        return httpx.Response(200)
+
+    with pytest.raises(RateLimited, match="before sending"):
+        await limiter.run("fetch", send, deadline=clock() + 2.0)
+    assert not sent
+    assert limiter.policies["fetch"].last_sent == pytest.approx(clock() - 2.0)
+    assert not limiter._lock.locked()
+
+
 async def test_unlearned_kind_honours_restriction_seen_elsewhere(limiter: RateLimiter) -> None:
     restricted = {
         **SEARCH_HEADERS,
@@ -324,3 +358,24 @@ async def test_fetch_never_inherits_search_restriction(limiter: RateLimiter) -> 
     # A fetch restriction never gates exchange (search's sibling) either.
     assert limiter.wait_for("exchange") == pytest.approx(60.0)
     assert limiter.wait_for("fetch") == pytest.approx(120.0)
+
+
+async def test_rate_limited_cause_separates_server_from_deadline(
+    limiter: RateLimiter, clock: FakeClock
+) -> None:
+    with pytest.raises(RateLimited) as server:
+        await limiter.run("search", reply(429, {"Retry-After": "2"}))
+    with pytest.raises(RateLimited) as refused:
+        await limiter.run("search", reply(), deadline=clock() + 1)
+    assert (server.value.cause, refused.value.cause) == ("server", "deadline")
+    assert RateLimited(1.0, "x").cause == "server"
+
+
+async def test_cut_off_send_has_its_own_cause(limiter: RateLimiter, clock: FakeClock) -> None:
+    async def hang() -> httpx.Response:
+        await asyncio.sleep(30)
+        return httpx.Response(200)
+
+    with pytest.raises(RateLimited) as cut_off:
+        await limiter.run("search", hang, deadline=clock() + 0.05)
+    assert cut_off.value.cause == "cancelled"

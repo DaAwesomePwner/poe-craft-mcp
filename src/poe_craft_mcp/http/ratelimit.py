@@ -35,12 +35,19 @@ _SECONDS_RE = re.compile(r"\d+(\.\d+)?", re.ASCII)
 
 
 class RateLimited(Exception):
-    """A trade call would wait more than the limit, or the server answered 429."""
+    """A trade call would wait more than the limit, or the server answered 429.
 
-    def __init__(self, retry_after: float, reason: str) -> None:
+    `cause` is "deadline" when the caller's deadline refused a wait before anything was sent,
+    "cancelled" when it cut off a request already in flight (`retry_after` is then the wait
+    for the next request, not the reason for the failure), "server" for a 429 or a queue
+    pause caused by one.
+    """
+
+    def __init__(self, retry_after: float, reason: str, cause: str = "server") -> None:
         super().__init__(f"trade rate limited ({reason}); retry in {retry_after:.0f}s")
         self.retry_after = retry_after
         self.reason = reason
+        self.cause = cause
 
 
 def parse_triples(value: str) -> list[tuple[int, int, int]]:
@@ -220,28 +227,40 @@ class RateLimiter:
     ) -> httpx.Response:
         """Wait for room under `kind`'s policy, then send.
 
-        Raises `RateLimited` instead of waiting (for the queue or for the limits) past
-        `deadline` (default `max_wait_s` from now), on 429, or when a 429 hit the queue
-        while this call was waiting.
+        Raises `RateLimited` instead of waiting (for the queue, for the limits or for the
+        response) past `deadline` (default `max_wait_s` from now), on 429, or when a 429 hit
+        the queue while this call was waiting.
         """
         deadline = self.deadline() if deadline is None else deadline
         epoch = self._pause_epoch
         try:
             await asyncio.wait_for(self._lock.acquire(), max(0.0, deadline - self.clock()))
         except TimeoutError:
-            raise RateLimited(self.wait_for(kind), "trade queue busy past deadline") from None
+            raise RateLimited(
+                self.wait_for(kind), "trade queue busy past deadline", "deadline"
+            ) from None
         try:
             if self._pause_epoch != epoch:
                 raise RateLimited(self.wait_for(kind), "queue paused by a 429")
             wait = self.wait_for(kind)
             if self.clock() + wait > deadline:
-                raise RateLimited(wait, f"{kind} would wait {wait:.1f}s")
+                raise RateLimited(wait, f"{kind} would wait {wait:.1f}s", "deadline")
             if wait > 0:
                 await self.sleep(wait)
+            if deadline - self.clock() <= 0:
+                raise RateLimited(
+                    self.wait_for(kind), f"{kind} deadline reached before sending", "deadline"
+                )
             sent_at = self.clock()
             for policy in self._policies_for(kind):
                 policy.record(sent_at)
-            response = await send()
+            try:
+                response = await asyncio.wait_for(send(), max(0.0, deadline - self.clock()))
+            except TimeoutError:
+                # The hit stays recorded: the request may have reached the server.
+                raise RateLimited(
+                    self.wait_for(kind), f"{kind} request ran past deadline", "cancelled"
+                ) from None
             self._observe(kind, response)
             if response.status_code == 429:
                 now = self.clock()

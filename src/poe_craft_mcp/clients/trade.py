@@ -41,7 +41,15 @@ if TYPE_CHECKING:
 
 log = logging.getLogger(__name__)
 
-__all__ = ["RateLimited", "SearchResult", "TradeClient", "TradeError", "TradeQuery", "get_trade"]
+__all__ = [
+    "NotCached",
+    "RateLimited",
+    "SearchResult",
+    "TradeClient",
+    "TradeError",
+    "TradeQuery",
+    "get_trade",
+]
 
 SEARCH_PATH = "/api/trade/search/{league}"
 SAVED_PATH = "/api/trade/{kind}/{league}/{id}"
@@ -51,6 +59,10 @@ FETCH_BATCH = 10
 PRICE_SORT = {"price": "asc"}
 EXCHANGE_SORT = {"have": "asc"}
 COOKIE_ORIGINS = frozenset({("https", "www.pathofexile.com", 443)})
+
+
+class NotCached(TradeError):
+    """A cache-only lookup found nothing cached; no request was made."""
 
 
 def _seg(value: str) -> str:
@@ -83,7 +95,7 @@ class TradeClient:
         await self._client.aclose()
 
     async def _cookie(self, url: httpx.URL) -> str | None:
-        port = url.port or {"https": 443, "http": 80}.get(url.scheme)
+        port = url.port if url.port is not None else {"https": 443, "http": 80}.get(url.scheme)
         if (url.scheme, url.host, port) not in COOKIE_ORIGINS:
             return None
         if not self._session_loaded:
@@ -136,9 +148,12 @@ class TradeClient:
             raise TradeError(f"{method} {path}: response echoed the session cookie", status)
         return data
 
-    async def resolve_saved_url(self, url: str, *, deadline: float | None = None) -> TradeQuery:
+    async def resolve_saved_url(
+        self, url: str, *, deadline: float | None = None, cache_only: bool = False
+    ) -> TradeQuery:
         """Query JSON behind a saved trade URL. The URL's league is dropped: pass the
-        current league to `search`/`exchange`/`listings_for`."""
+        current league to `search`/`exchange`/`listings_for`. `cache_only` raises
+        `NotCached` instead of requesting an uncached opaque saved search."""
         saved = parse_saved_url(url)
         decoded = decode_search_id(saved.search_id)
         if decoded is not None:
@@ -147,6 +162,8 @@ class TradeClient:
         cached = await self.cache.get(key)
         if cached is not None:
             return query_from_body(cached.json(), saved.kind)
+        if cache_only:
+            raise NotCached("saved search is not cached")
         path = SAVED_PATH.format(
             kind=saved.kind, league=_seg(saved.url_league), id=_seg(saved.search_id)
         )
@@ -225,19 +242,26 @@ class TradeClient:
         *,
         online_only: bool = True,
         instant_buyout: bool = False,
+        deadline: float | None = None,
+        cache_only: bool = False,
     ) -> dict[str, Any]:
         """The cheapest `sample` listings for a saved URL or query JSON, cached per query.
         Any saved sort is replaced by price ascending.
 
+        `cache_only` never makes a request: it returns any cached copy (marked `stale` once
+        older than `trade_cache_min`) or raises `NotCached`.
+
         Returns `{listings, total, search_id, age_seconds, from_cache, stale}`. Raises
         `RateLimited` or `TradeError` only when there is no cached copy to fall back on,
         and `ValueError` for `instant_buyout` on a bulk exchange query. All requests share
-        one `max_wait_s` deadline.
+        one deadline: the caller's, else `max_wait_s` from now.
         """
-        deadline = self.limiter.deadline()
+        deadline = self.limiter.deadline() if deadline is None else deadline
         sample = sample or self.config.trade_sample
         if isinstance(query_or_url, str):
-            tq = await self.resolve_saved_url(query_or_url, deadline=deadline)
+            tq = await self.resolve_saved_url(
+                query_or_url, deadline=deadline, cache_only=cache_only
+            )
         else:
             tq = query_from_body(query_or_url, "search")
         if tq.kind == "exchange" and instant_buyout:
@@ -245,8 +269,11 @@ class TradeClient:
         digest = query_hash(tq.kind, tq.query, online_only, instant_buyout, sample)
         key = f"trade://listings/{league}/{digest}"
         cached = await self.cache.get(key)
-        if cached is not None and cached.age_seconds < self.config.trade_cache_min * 60:
-            return _from_cache(cached, stale=False)
+        fresh = cached is not None and cached.age_seconds < self.config.trade_cache_min * 60
+        if cached is not None and (fresh or cache_only):
+            return _from_cache(cached, stale=not fresh)
+        if cache_only:
+            raise NotCached("trade listings are not cached")
         try:
             if tq.kind == "exchange":
                 want, have = tq.query.get("want") or [], tq.query.get("have") or []
