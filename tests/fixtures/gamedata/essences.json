@@ -1,0 +1,28 @@
+{
+ "Metadata/Items/Currency/CurrencyEssenceGreed1": {
+  "item_level_restriction": 35,
+  "level": 1,
+  "mods": {
+   "Body Armour": "IncreasedLife1"
+  },
+  "name": "Whispering Essence of Greed",
+  "spawn_level_min": 1,
+  "type": {
+   "is_corruption_only": false,
+   "tier": 1
+  }
+ },
+ "Metadata/Items/Currency/CurrencyEssenceTorment1": {
+  "item_level_restriction": 45,
+  "level": 2,
+  "mods": {
+   "Ring": "AddedLightningDamage2"
+  },
+  "name": "Muttering Essence of Torment",
+  "spawn_level_min": 12,
+  "type": {
+   "is_corruption_only": false,
+   "tier": 2
+  }
+ }
+}

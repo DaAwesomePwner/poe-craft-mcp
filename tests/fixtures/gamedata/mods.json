@@ -1,0 +1,693 @@
+{
+ "AddedFireDamage1": {
+  "adds_tags": [],
+  "domain": "item",
+  "generation_type": "prefix",
+  "generation_weights": [],
+  "groups": [
+   "FireDamage"
+  ],
+  "implicit_tags": [
+   "elemental_damage",
+   "damage",
+   "elemental",
+   "fire",
+   "attack"
+  ],
+  "is_essence_only": false,
+  "name": "Heated",
+  "required_level": 1,
+  "spawn_weights": [
+   {
+    "tag": "ring",
+    "weight": 500
+   },
+   {
+    "tag": "amulet",
+    "weight": 500
+   },
+   {
+    "tag": "gloves",
+    "weight": 500
+   },
+   {
+    "tag": "default",
+    "weight": 0
+   }
+  ],
+  "stats": [
+   {
+    "id": "attack_minimum_added_fire_damage",
+    "max": 1,
+    "min": 1
+   },
+   {
+    "id": "attack_maximum_added_fire_damage",
+    "max": 2,
+    "min": 2
+   }
+  ],
+  "text": "Adds 1 to 2 Fire Damage to Attacks",
+  "type": "FireDamage"
+ },
+ "AddedLightningDamage2": {
+  "adds_tags": [],
+  "domain": "item",
+  "generation_type": "prefix",
+  "generation_weights": [],
+  "groups": [
+   "LightningDamage"
+  ],
+  "implicit_tags": [
+   "elemental_damage",
+   "damage",
+   "elemental",
+   "lightning",
+   "attack"
+  ],
+  "is_essence_only": false,
+  "name": "Buzzing",
+  "required_level": 13,
+  "spawn_weights": [
+   {
+    "tag": "ring",
+    "weight": 500
+   },
+   {
+    "tag": "amulet",
+    "weight": 500
+   },
+   {
+    "tag": "gloves",
+    "weight": 500
+   },
+   {
+    "tag": "default",
+    "weight": 0
+   }
+  ],
+  "stats": [
+   {
+    "id": "attack_minimum_added_lightning_damage",
+    "max": 1,
+    "min": 1
+   },
+   {
+    "id": "attack_maximum_added_lightning_damage",
+    "max": 15,
+    "min": 14
+   }
+  ],
+  "text": "Adds 1 to (14-15) Lightning Damage to Attacks",
+  "type": "LightningDamage"
+ },
+ "AllAttributes1": {
+  "adds_tags": [],
+  "domain": "item",
+  "generation_type": "suffix",
+  "generation_weights": [],
+  "groups": [
+   "AllAttributes"
+  ],
+  "implicit_tags": [
+   "attribute"
+  ],
+  "is_essence_only": false,
+  "name": "of the Clouds",
+  "required_level": 1,
+  "spawn_weights": [
+   {
+    "tag": "amulet",
+    "weight": 800
+   },
+   {
+    "tag": "ring",
+    "weight": 400
+   },
+   {
+    "tag": "default",
+    "weight": 0
+   }
+  ],
+  "stats": [
+   {
+    "id": "additional_all_attributes",
+    "max": 4,
+    "min": 1
+   }
+  ],
+  "text": "+(1-4) to all Attributes",
+  "type": "AllAttributes"
+ },
+ "AttackerTakesDamage1": {
+  "adds_tags": [],
+  "domain": "item",
+  "generation_type": "prefix",
+  "generation_weights": [],
+  "groups": [
+   "AttackerTakesDamageNoRange"
+  ],
+  "implicit_tags": [
+   "physical_damage",
+   "damage",
+   "physical"
+  ],
+  "is_essence_only": false,
+  "name": "Thorny",
+  "required_level": 1,
+  "spawn_weights": [
+   {
+    "tag": "body_armour",
+    "weight": 1000
+   },
+   {
+    "tag": "shield",
+    "weight": 1000
+   },
+   {
+    "tag": "belt",
+    "weight": 1000
+   },
+   {
+    "tag": "helmet",
+    "weight": 1000
+   },
+   {
+    "tag": "default",
+    "weight": 0
+   }
+  ],
+  "stats": [
+   {
+    "id": "physical_damage_to_return_to_melee_attacker",
+    "max": 4,
+    "min": 1
+   },
+   {
+    "id": "dummy_stat_display_nothing",
+    "max": 0,
+    "min": 0
+   }
+  ],
+  "text": "Reflects (1-4) Physical Damage to Melee Attackers",
+  "type": "AttackerTakesDamageNoRange"
+ },
+ "ChaosResist1": {
+  "adds_tags": [],
+  "domain": "item",
+  "generation_type": "suffix",
+  "generation_weights": [],
+  "groups": [
+   "ChaosResistance"
+  ],
+  "implicit_tags": [
+   "chaos",
+   "resistance"
+  ],
+  "is_essence_only": false,
+  "name": "of the Lost",
+  "required_level": 16,
+  "spawn_weights": [
+   {
+    "tag": "armour",
+    "weight": 250
+   },
+   {
+    "tag": "ring",
+    "weight": 250
+   },
+   {
+    "tag": "amulet",
+    "weight": 250
+   },
+   {
+    "tag": "belt",
+    "weight": 250
+   },
+   {
+    "tag": "quiver",
+    "weight": 250
+   },
+   {
+    "tag": "default",
+    "weight": 0
+   }
+  ],
+  "stats": [
+   {
+    "id": "base_chaos_damage_resistance_%",
+    "max": 10,
+    "min": 5
+   }
+  ],
+  "text": "+(5-10)% to Chaos Resistance",
+  "type": "ChaosResistance"
+ },
+ "FireResist1": {
+  "adds_tags": [],
+  "domain": "item",
+  "generation_type": "suffix",
+  "generation_weights": [],
+  "groups": [
+   "FireResistance"
+  ],
+  "implicit_tags": [
+   "elemental",
+   "fire",
+   "resistance"
+  ],
+  "is_essence_only": false,
+  "name": "of the Whelpling",
+  "required_level": 1,
+  "spawn_weights": [
+   {
+    "tag": "armour",
+    "weight": 1000
+   },
+   {
+    "tag": "ring",
+    "weight": 1000
+   },
+   {
+    "tag": "amulet",
+    "weight": 1000
+   },
+   {
+    "tag": "belt",
+    "weight": 1000
+   },
+   {
+    "tag": "quiver",
+    "weight": 1000
+   },
+   {
+    "tag": "default",
+    "weight": 0
+   }
+  ],
+  "stats": [
+   {
+    "id": "base_fire_damage_resistance_%",
+    "max": 11,
+    "min": 6
+   }
+  ],
+  "text": "+(6-11)% to Fire Resistance",
+  "type": "FireResistance"
+ },
+ "FireResist6": {
+  "adds_tags": [],
+  "domain": "item",
+  "generation_type": "suffix",
+  "generation_weights": [],
+  "groups": [
+   "FireResistance"
+  ],
+  "implicit_tags": [
+   "elemental",
+   "fire",
+   "resistance"
+  ],
+  "is_essence_only": false,
+  "name": "of the Volcano",
+  "required_level": 60,
+  "spawn_weights": [
+   {
+    "tag": "armour",
+    "weight": 1000
+   },
+   {
+    "tag": "ring",
+    "weight": 1000
+   },
+   {
+    "tag": "amulet",
+    "weight": 1000
+   },
+   {
+    "tag": "belt",
+    "weight": 1000
+   },
+   {
+    "tag": "quiver",
+    "weight": 1000
+   },
+   {
+    "tag": "default",
+    "weight": 0
+   }
+  ],
+  "stats": [
+   {
+    "id": "base_fire_damage_resistance_%",
+    "max": 41,
+    "min": 36
+   }
+  ],
+  "text": "+(36-41)% to Fire Resistance",
+  "type": "FireResistance"
+ },
+ "IncreasedLife0": {
+  "adds_tags": [],
+  "domain": "item",
+  "generation_type": "prefix",
+  "generation_weights": [],
+  "groups": [
+   "IncreasedLife"
+  ],
+  "implicit_tags": [
+   "resource",
+   "life"
+  ],
+  "is_essence_only": false,
+  "name": "Hale",
+  "required_level": 1,
+  "spawn_weights": [
+   {
+    "tag": "fishing_rod",
+    "weight": 0
+   },
+   {
+    "tag": "weapon",
+    "weight": 0
+   },
+   {
+    "tag": "default",
+    "weight": 1000
+   }
+  ],
+  "stats": [
+   {
+    "id": "base_maximum_life",
+    "max": 9,
+    "min": 3
+   }
+  ],
+  "text": "+(3-9) to maximum Life",
+  "type": "IncreasedLife"
+ },
+ "IncreasedLife1": {
+  "adds_tags": [],
+  "domain": "item",
+  "generation_type": "prefix",
+  "generation_weights": [],
+  "groups": [
+   "IncreasedLife"
+  ],
+  "implicit_tags": [
+   "resource",
+   "life"
+  ],
+  "is_essence_only": false,
+  "name": "Healthy",
+  "required_level": 5,
+  "spawn_weights": [
+   {
+    "tag": "fishing_rod",
+    "weight": 0
+   },
+   {
+    "tag": "weapon",
+    "weight": 0
+   },
+   {
+    "tag": "default",
+    "weight": 1000
+   }
+  ],
+  "stats": [
+   {
+    "id": "base_maximum_life",
+    "max": 24,
+    "min": 10
+   }
+  ],
+  "text": "+(10-24) to maximum Life",
+  "type": "IncreasedLife"
+ },
+ "LocalIncreasedEnergyShield1": {
+  "adds_tags": [],
+  "domain": "item",
+  "generation_type": "prefix",
+  "generation_weights": [],
+  "groups": [
+   "BaseLocalDefences"
+  ],
+  "implicit_tags": [
+   "defences",
+   "energy_shield"
+  ],
+  "is_essence_only": false,
+  "name": "Shining",
+  "required_level": 3,
+  "spawn_weights": [
+   {
+    "tag": "int_armour",
+    "weight": 1000
+   },
+   {
+    "tag": "str_dex_int_armour",
+    "weight": 166
+   },
+   {
+    "tag": "default",
+    "weight": 0
+   }
+  ],
+  "stats": [
+   {
+    "id": "local_energy_shield",
+    "max": 5,
+    "min": 3
+   }
+  ],
+  "text": "+(3-5) to maximum Energy Shield",
+  "type": "LocalEnergyShield"
+ },
+ "LocalIncreasedEnergyShieldPercent1": {
+  "adds_tags": [],
+  "domain": "item",
+  "generation_type": "prefix",
+  "generation_weights": [],
+  "groups": [
+   "DefencesPercent"
+  ],
+  "implicit_tags": [
+   "defences",
+   "energy_shield"
+  ],
+  "is_essence_only": false,
+  "name": "Protective",
+  "required_level": 3,
+  "spawn_weights": [
+   {
+    "tag": "int_armour",
+    "weight": 1000
+   },
+   {
+    "tag": "default",
+    "weight": 0
+   }
+  ],
+  "stats": [
+   {
+    "id": "local_energy_shield_+%",
+    "max": 28,
+    "min": 11
+   }
+  ],
+  "text": "(11-28)% increased Energy Shield",
+  "type": "LocalEnergyShieldPercent"
+ },
+ "MaxPrefixMaxSuffixImplicitE6": {
+  "adds_tags": [],
+  "domain": "item",
+  "generation_type": "unique",
+  "generation_weights": [],
+  "groups": [
+   "MaxPrefixMaxSuffix"
+  ],
+  "implicit_tags": [],
+  "is_essence_only": false,
+  "name": "",
+  "required_level": 30,
+  "spawn_weights": [],
+  "stats": [
+   {
+    "id": "local_maximum_prefixes_allowed_+",
+    "max": -2,
+    "min": -2
+   },
+   {
+    "id": "local_maximum_suffixes_allowed_+",
+    "max": 1,
+    "min": 1
+   },
+   {
+    "id": "local_implicit_mod_cannot_be_changed",
+    "max": 1,
+    "min": 1
+   },
+   {
+    "id": "local_suffix_mod_effect_+%",
+    "max": 50,
+    "min": 50
+   },
+   {
+    "id": "local_prefix_mod_effect_+%",
+    "max": 0,
+    "min": 0
+   }
+  ],
+  "text": "-2 Prefix Modifiers allowed\n+1 Suffix Modifier allowed\nImplicit Modifiers Cannot Be Changed\n50% increased Suffix Modifier magnitudes",
+  "type": "MaxPrefixMaxSuffixImplicit"
+ },
+ "Strength1": {
+  "adds_tags": [],
+  "domain": "item",
+  "generation_type": "suffix",
+  "generation_weights": [],
+  "groups": [
+   "Strength"
+  ],
+  "implicit_tags": [
+   "attribute"
+  ],
+  "is_essence_only": false,
+  "name": "of the Brute",
+  "required_level": 1,
+  "spawn_weights": [
+   {
+    "tag": "ring",
+    "weight": 1000
+   },
+   {
+    "tag": "amulet",
+    "weight": 1000
+   },
+   {
+    "tag": "belt",
+    "weight": 1000
+   },
+   {
+    "tag": "str_armour",
+    "weight": 1000
+   },
+   {
+    "tag": "str_dex_armour",
+    "weight": 500
+   },
+   {
+    "tag": "str_int_armour",
+    "weight": 500
+   },
+   {
+    "tag": "str_dex_int_armour",
+    "weight": 333
+   },
+   {
+    "tag": "sword",
+    "weight": 500
+   },
+   {
+    "tag": "mace",
+    "weight": 1000
+   },
+   {
+    "tag": "sceptre",
+    "weight": 500
+   },
+   {
+    "tag": "staff",
+    "weight": 500
+   },
+   {
+    "tag": "axe",
+    "weight": 500
+   },
+   {
+    "tag": "default",
+    "weight": 0
+   }
+  ],
+  "stats": [
+   {
+    "id": "additional_strength",
+    "max": 12,
+    "min": 8
+   }
+  ],
+  "text": "+(8-12) to Strength",
+  "type": "Strength"
+ },
+ "StrengthEssence7_": {
+  "adds_tags": [],
+  "domain": "item",
+  "generation_type": "suffix",
+  "generation_weights": [],
+  "groups": [
+   "Strength"
+  ],
+  "implicit_tags": [
+   "attribute"
+  ],
+  "is_essence_only": true,
+  "name": "of the Essence",
+  "required_level": 82,
+  "spawn_weights": [
+   {
+    "tag": "default",
+    "weight": 0
+   }
+  ],
+  "stats": [
+   {
+    "id": "additional_strength",
+    "max": 58,
+    "min": 51
+   }
+  ],
+  "text": "+(51-58) to Strength",
+  "type": "Strength"
+ },
+ "StunRecovery1": {
+  "adds_tags": [],
+  "domain": "item",
+  "generation_type": "suffix",
+  "generation_weights": [],
+  "groups": [
+   "StunRecovery"
+  ],
+  "implicit_tags": [],
+  "is_essence_only": false,
+  "name": "of Thick Skin",
+  "required_level": 1,
+  "spawn_weights": [
+   {
+    "tag": "gloves",
+    "weight": 0
+   },
+   {
+    "tag": "armour",
+    "weight": 1000
+   },
+   {
+    "tag": "belt",
+    "weight": 1000
+   },
+   {
+    "tag": "default",
+    "weight": 0
+   }
+  ],
+  "stats": [
+   {
+    "id": "base_stun_recovery_+%",
+    "max": 13,
+    "min": 11
+   }
+  ],
+  "text": "(11-13)% increased Stun and Block Recovery",
+  "type": "StunRecovery"
+ }
+}

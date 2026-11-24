@@ -1,0 +1,92 @@
+{
+ "Metadata/Items/Armours/BodyArmours/BodyInt17": {
+  "domain": "item",
+  "drop_level": 68,
+  "implicits": [],
+  "inherits_from": "Metadata/Items/Armours/BodyArmours/AbstractBodyArmour",
+  "inventory_height": 3,
+  "inventory_width": 2,
+  "item_class": "Body Armour",
+  "name": "Vaal Regalia",
+  "properties": {
+   "energy_shield": {
+    "max": 197,
+    "min": 171
+   },
+   "movement_speed": -3
+  },
+  "release_state": "released",
+  "requirements": {
+   "dexterity": 0,
+   "intelligence": 194,
+   "level": 68,
+   "strength": 0
+  },
+  "tags": [
+   "int_armour",
+   "top_tier_base_item_type",
+   "body_armour",
+   "armour",
+   "default"
+  ]
+ },
+ "Metadata/Items/Jewels/JewelStr": {
+  "domain": "jewel",
+  "drop_level": 20,
+  "implicits": [],
+  "inherits_from": "Metadata/Items/Jewels/AbstractJewel",
+  "inventory_height": 1,
+  "inventory_width": 1,
+  "item_class": "Jewel",
+  "name": "Crimson Jewel",
+  "properties": {},
+  "release_state": "released",
+  "tags": [
+   "jewel",
+   "not_dex",
+   "not_int",
+   "not_for_sale",
+   "strjewel",
+   "default"
+  ]
+ },
+ "Metadata/Items/Rings/Ring12": {
+  "domain": "item",
+  "drop_level": 20,
+  "implicits": [
+   "FireAndLightningResistImplicitRing1"
+  ],
+  "inherits_from": "Metadata/Items/Rings/AbstractRing",
+  "inventory_height": 1,
+  "inventory_width": 1,
+  "item_class": "Ring",
+  "name": "Two-Stone Ring",
+  "properties": {},
+  "release_state": "released",
+  "tags": [
+   "twostonering",
+   "ring",
+   "default"
+  ]
+ },
+ "Metadata/Items/Rings/RingE6": {
+  "domain": "item",
+  "drop_level": 75,
+  "implicits": [
+   "MaxPrefixMaxSuffixImplicitE6"
+  ],
+  "inherits_from": "Metadata/Items/Rings/AbstractRing",
+  "inventory_height": 1,
+  "inventory_width": 1,
+  "item_class": "Ring",
+  "name": "Helical Ring",
+  "properties": {},
+  "release_state": "released",
+  "tags": [
+   "not_for_sale",
+   "experimental_base",
+   "ring",
+   "default"
+  ]
+ }
+}
