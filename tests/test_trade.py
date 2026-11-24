@@ -13,7 +13,13 @@ import pytest
 import respx
 
 from poe_craft_mcp.clients.trade import NotCached, RateLimited, TradeClient, TradeError, get_trade
-from poe_craft_mcp.clients.trade_models import decode_search_id, parse_saved_url, query_hash
+from poe_craft_mcp.clients.trade_models import (
+    LISTINGS_VERSION,
+    decode_search_id,
+    normalize_listing,
+    parse_saved_url,
+    query_hash,
+)
 from poe_craft_mcp.config import Config
 from poe_craft_mcp.context import AppContext
 from poe_craft_mcp.http.cache import ResponseCache
@@ -130,7 +136,8 @@ async def test_fetch_batches_of_ten_and_normalizes(trade: TradeClient, config: C
     assert all("Cookie" not in call.request.headers for call in fetch.calls)
     assert (len(listings), not_buyout, unpriced) == (30, 0, 0)
     first = listings[0]
-    assert set(first) == {"id", "amount", "currency", "indexed", "stack_size"}
+    assert set(first) == {"id", "amount", "currency", "indexed", "stack_size", "explicit_stats"}
+    assert first["explicit_stats"] == []
     assert (first["amount"], first["currency"]) == (5.0, "chaos")
     assert "account0" not in json.dumps(listings)
 
@@ -458,3 +465,105 @@ async def test_cache_only_serves_any_cached_copy_and_never_requests(
     old = await trade.listings_for("Covens", SAVED_URL, sample=10, cache_only=True)
     assert (fresh["stale"], old["stale"], old["age_seconds"]) == (False, True, 1500)
     assert (search.call_count, fetch.call_count) == (1, 1)
+
+
+def hashed_entry(hashes: Any) -> dict[str, Any]:
+    entry = json.loads(json.dumps(fixture("fetch")["body"]["result"][0]))
+    if hashes is not None:
+        entry["item"]["extended"] = {"hashes": hashes}
+    return entry
+
+
+def test_normalize_listing_reads_explicit_and_fractured_hashes() -> None:
+    entry = hashed_entry(
+        {
+            "explicit": [["explicit.stat_30", [0]], ["explicit.stat_4", [1, 2]]],
+            "fractured": [["fractured.stat_9", [0]], ["explicit.stat_4", [0]]],
+            "implicit": [["implicit.stat_77", [0]]],
+            "enchant": [["enchant.stat_88", [0]]],
+        }
+    )
+    listing = normalize_listing(entry)
+    assert listing is not None
+    assert listing["explicit_stats"] == ["explicit.stat_30", "explicit.stat_4", "explicit.stat_9"]
+    assert {"id", "amount", "currency", "indexed", "stack_size"} <= set(listing)
+
+
+def test_normalize_listing_tolerates_null_indices_and_bare_ids() -> None:
+    entry = hashed_entry(
+        {"explicit": [["explicit.stat_5", None], ["stat_6", None], ["stat_5", [0]]]}
+    )
+    assert normalize_listing(entry)["explicit_stats"] == ["explicit.stat_5", "explicit.stat_6"]  # type: ignore[index]
+
+
+@pytest.mark.parametrize(
+    "hashes",
+    [
+        None,
+        [],
+        "explicit",
+        {},
+        {"explicit": None},
+        {"explicit": "stat_1"},
+        {"explicit": [None, 3, [], [None, [0]], ["pseudo.stat_1", [0]], ["explicit.stat_x", [0]]]},
+        {"explicit": {"explicit.stat_1": [0]}, "fractured": 7},
+    ],
+)
+def test_normalize_listing_malformed_hashes_give_no_stats(hashes: Any) -> None:
+    entry = hashed_entry(hashes)
+    if hashes is not None:
+        entry["item"]["extended"] = {"hashes": hashes}
+    listing = normalize_listing(entry)
+    assert listing is not None and listing["explicit_stats"] == []
+
+
+@pytest.mark.parametrize("extended", [None, 5, [], {"hashes": None}, {"mods": {}}])
+def test_normalize_listing_without_usable_extended(extended: Any) -> None:
+    entry = hashed_entry(None)
+    entry["item"]["extended"] = extended
+    listing = normalize_listing(entry)
+    assert listing is not None and listing["explicit_stats"] == []
+
+
+@respx.mock
+async def test_listings_for_returns_explicit_stats(trade: TradeClient) -> None:
+    entries = [
+        hashed_entry(
+            {"explicit": [["explicit.stat_2", [0]]], "fractured": [["explicit.stat_1", [0]]]}
+        )
+    ]
+    respx.post(f"{BASE}/api/trade/search/Covens").mock(return_value=recorded("search"))
+    respx.get(url__startswith=f"{BASE}/api/trade/fetch/").mock(
+        return_value=httpx.Response(200, json={"result": entries})
+    )
+    first = await trade.listings_for("Covens", SAVED_URL, sample=10)
+    assert first["listings"][0]["explicit_stats"] == ["explicit.stat_1", "explicit.stat_2"]
+    again = await trade.listings_for("Covens", SAVED_URL, sample=10)
+    assert again["from_cache"] is True
+    assert again["listings"][0]["explicit_stats"] == ["explicit.stat_1", "explicit.stat_2"]
+
+
+@respx.mock
+async def test_listings_cached_before_explicit_stats_are_not_served(
+    trade: TradeClient, cache: ResponseCache
+) -> None:
+    search, fetch = mock_search_and_fetch()
+    query = {"type": "Simple Robe", "status": {"option": "securable"}}
+    old_key = f"trade://listings/Covens/{query_hash('search', query, 10)}"
+    old = {"listings": [{"amount": 1.0}], "total": 1, "search_id": "old"}
+    await cache.put(old_key, json.dumps(old))
+    assert LISTINGS_VERSION >= 2
+    result = await trade.listings_for("Covens", {"query": query}, sample=10)
+    assert (result["from_cache"], result["search_id"]) == (False, SEARCH["id"])
+    assert (search.call_count, fetch.call_count) == (1, 1)
+    # cache_only misses it too, and a rate limit cannot fall back to it.
+    other = {"query": {"type": "Other", "status": {"option": "securable"}}}
+    other_query = other["query"]
+    await cache.put(
+        f"trade://listings/Covens/{query_hash('search', other_query, 10)}", json.dumps(old)
+    )
+    with pytest.raises(NotCached):
+        await trade.listings_for("Covens", other, sample=10, cache_only=True)
+    trade.limiter.paused_until = trade.limiter.clock() + 600
+    with pytest.raises(RateLimited):
+        await trade.listings_for("Covens", other, sample=10)
