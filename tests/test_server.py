@@ -3,7 +3,6 @@ from __future__ import annotations
 import io
 import logging
 from pathlib import Path
-from typing import Any
 
 import pytest
 from mcp import Client
@@ -16,24 +15,15 @@ from poe_craft_mcp.server import SERVER_NAME, build_server
 SECRET = "a1b2c3d4e5f6deadbeef"
 
 
-async def test_server_lists_and_calls_get_league_status(config: Config) -> None:
+async def test_server_lists_price_and_status_tools(config: Config) -> None:
     server = build_server(config)
     assert server.name == SERVER_NAME
     async with Client(server) as client:
         tools = {tool.name: tool for tool in (await client.list_tools()).tools}
-        assert "get_league_status" in tools
-        annotations = tools["get_league_status"].annotations
+    for name in ("get_league_status", "get_prices", "get_base_price"):
+        assert name in tools
+        annotations = tools[name].annotations
         assert annotations is not None and annotations.read_only_hint is True
-
-        result = await client.call_tool("get_league_status", {})
-    assert not result.is_error
-    data: dict[str, Any] = result.structured_content or {}
-    assert data["league"] == "auto"
-    assert data["chaos_per_divine"] is None
-    assert data["poesessid_set"] is False
-    assert data["data_age_seconds"] is None
-    assert data["sources"] == []
-    assert data["note"] == "stub"
 
 
 def test_envelope_takes_oldest_source_age() -> None:

@@ -1,0 +1,406 @@
+{
+ "status": 200,
+ "headers": {
+  "content-type": "application/json",
+  "x-rate-limit-policy": "trade-fetch-request-limit",
+  "x-rate-limit-rules": "Ip",
+  "x-rate-limit-ip": "12:4:10,16:12:300,50:300:300,1000:21600:1800",
+  "x-rate-limit-ip-state": "1:4:0,1:12:0,2:300:0,209:21600:0"
+ },
+ "body": {
+  "result": [
+   {
+    "id": "c5b7af88ad1c6a899c04e926c1f3f9e82bc867f4504d95cef91dd6533e7b6f84",
+    "listing": {
+     "method": "psapi",
+     "indexed": "2026-11-22T09:42:11Z",
+     "stash": {
+      "name": "~price",
+      "x": 4,
+      "y": 14
+     },
+     "price": {
+      "type": "~price",
+      "amount": 5,
+      "currency": "chaos"
+     },
+     "account": {
+      "name": "account0#0000",
+      "online": {
+       "league": "Covens"
+      },
+      "lastCharacterName": "character0",
+      "language": "en_US",
+      "realm": "pc"
+     },
+     "whisper": "@character0 Hi, I would like to buy your Tabula Rasa Simple Robe listed for 5 chaos in Covens"
+    },
+    "item": {
+     "verified": true,
+     "league": "Covens",
+     "id": "c5b7af88ad1c6a899c04e926c1f3f9e82bc867f4504d95cef91dd6533e7b6f84",
+     "name": "",
+     "typeLine": "Simple Robe",
+     "baseType": "Simple Robe",
+     "rarity": "Unique",
+     "ilvl": 83,
+     "identified": false,
+     "frameType": 3
+    }
+   },
+   {
+    "id": "9799c0da4510bf19af1fff426a247faaf85b62359473811ede850ac658ab1eb7",
+    "listing": {
+     "method": "psapi",
+     "indexed": "2026-11-23T05:43:19Z",
+     "stash": {
+      "name": "~price",
+      "x": 8,
+      "y": 2
+     },
+     "price": {
+      "type": "~price",
+      "amount": 5,
+      "currency": "chaos"
+     },
+     "account": {
+      "name": "account1#0000",
+      "online": {
+       "league": "Covens"
+      },
+      "lastCharacterName": "character1",
+      "language": "en_US",
+      "realm": "pc"
+     },
+     "whisper": "@character1 Hi, I would like to buy your Tabula Rasa Simple Robe listed for 5 chaos in Covens"
+    },
+    "item": {
+     "verified": true,
+     "league": "Covens",
+     "id": "9799c0da4510bf19af1fff426a247faaf85b62359473811ede850ac658ab1eb7",
+     "name": "Tabula Rasa",
+     "typeLine": "Simple Robe",
+     "baseType": "Simple Robe",
+     "rarity": "Unique",
+     "ilvl": 85,
+     "identified": true,
+     "frameType": 3
+    }
+   },
+   {
+    "id": "08f13f96d1640f7e9b4bd5c3a12fbe94049326ee3d10084a495c15f97b3990c6",
+    "listing": {
+     "method": "psapi",
+     "indexed": "2026-11-22T02:09:39Z",
+     "stash": {
+      "name": "~price",
+      "x": 8,
+      "y": 5
+     },
+     "price": {
+      "type": "~price",
+      "amount": 5,
+      "currency": "chaos"
+     },
+     "account": {
+      "name": "account2#0000",
+      "online": {
+       "league": "Covens"
+      },
+      "lastCharacterName": "character2",
+      "language": "en_US",
+      "realm": "pc"
+     },
+     "whisper": "@character2 Hi, I would like to buy your Tabula Rasa Simple Robe listed for 5 chaos in Covens"
+    },
+    "item": {
+     "verified": true,
+     "league": "Covens",
+     "id": "08f13f96d1640f7e9b4bd5c3a12fbe94049326ee3d10084a495c15f97b3990c6",
+     "name": "Tabula Rasa",
+     "typeLine": "Simple Robe",
+     "baseType": "Simple Robe",
+     "rarity": "Unique",
+     "ilvl": 82,
+     "identified": true,
+     "frameType": 3
+    }
+   },
+   {
+    "id": "b2fc33d793b52f99d296213b75f60a00379703bcc6db19e1b7b93c45b0fae932",
+    "listing": {
+     "method": "psapi",
+     "indexed": "2026-11-22T21:38:42Z",
+     "stash": {
+      "name": "~price",
+      "x": 28,
+      "y": 0
+     },
+     "price": {
+      "type": "~price",
+      "amount": 5,
+      "currency": "chaos"
+     },
+     "account": {
+      "name": "account3#0000",
+      "online": {
+       "league": "Covens",
+       "status": "afk"
+      },
+      "lastCharacterName": "character3",
+      "language": "en_US",
+      "realm": "pc"
+     },
+     "whisper": "@character3 Hi, I would like to buy your Tabula Rasa Simple Robe listed for 5 chaos in Covens"
+    },
+    "item": {
+     "verified": true,
+     "league": "Covens",
+     "id": "b2fc33d793b52f99d296213b75f60a00379703bcc6db19e1b7b93c45b0fae932",
+     "name": "Tabula Rasa",
+     "typeLine": "Simple Robe",
+     "baseType": "Simple Robe",
+     "rarity": "Unique",
+     "ilvl": 85,
+     "identified": true,
+     "frameType": 3
+    }
+   },
+   {
+    "id": "5928c64d1240427adf55b484610ce1febd0f856245bb2f7aaffbb2f1597bb6a2",
+    "listing": {
+     "method": "psapi",
+     "indexed": "2026-11-24T00:35:50Z",
+     "stash": {
+      "name": "~price",
+      "x": 2,
+      "y": 7
+     },
+     "price": {
+      "type": "~b/o",
+      "amount": 5,
+      "currency": "chaos"
+     },
+     "account": {
+      "name": "account4#0000",
+      "online": {
+       "league": "Covens"
+      },
+      "lastCharacterName": "character4",
+      "language": "ko_KR",
+      "realm": "pc"
+     },
+     "whisper": "@character4 Hi, I would like to buy your Tabula Rasa Simple Robe listed for 5 chaos in Covens"
+    },
+    "item": {
+     "verified": true,
+     "league": "Covens",
+     "id": "5928c64d1240427adf55b484610ce1febd0f856245bb2f7aaffbb2f1597bb6a2",
+     "name": "Tabula Rasa",
+     "typeLine": "Simple Robe",
+     "baseType": "Simple Robe",
+     "rarity": "Unique",
+     "ilvl": 80,
+     "identified": true,
+     "frameType": 3
+    }
+   },
+   {
+    "id": "cdf9fc59919664eeaf0aa977a0017fc842d90f39651d9d62b087f2a6d0c1c0c8",
+    "listing": {
+     "method": "psapi",
+     "indexed": "2026-11-19T17:34:24Z",
+     "stash": {
+      "name": "~price",
+      "x": 28,
+      "y": 0
+     },
+     "price": {
+      "type": "~price",
+      "amount": 5,
+      "currency": "chaos"
+     },
+     "account": {
+      "name": "account5#0000",
+      "online": {
+       "league": "Covens"
+      },
+      "lastCharacterName": "character5",
+      "language": "en_US",
+      "realm": "pc"
+     },
+     "whisper": "@character5 Hi, I would like to buy your Tabula Rasa Simple Robe listed for 5 chaos in Covens"
+    },
+    "item": {
+     "verified": true,
+     "league": "Covens",
+     "id": "cdf9fc59919664eeaf0aa977a0017fc842d90f39651d9d62b087f2a6d0c1c0c8",
+     "name": "Tabula Rasa",
+     "typeLine": "Simple Robe",
+     "baseType": "Simple Robe",
+     "rarity": "Unique",
+     "ilvl": 85,
+     "identified": true,
+     "frameType": 3
+    }
+   },
+   {
+    "id": "75eaeba88dd29315cec62c6373362f570bfe6d726b491a8555c38aa380e2f652",
+    "listing": {
+     "method": "psapi",
+     "indexed": "2026-11-23T04:48:07Z",
+     "stash": {
+      "name": "~price",
+      "x": 6,
+      "y": 0
+     },
+     "price": {
+      "type": "~price",
+      "amount": 5,
+      "currency": "chaos"
+     },
+     "account": {
+      "name": "account6#0000",
+      "online": {
+       "league": "Covens"
+      },
+      "lastCharacterName": "character6",
+      "language": "en_US",
+      "realm": "pc"
+     },
+     "whisper": "@character6 Hi, I would like to buy your Tabula Rasa Simple Robe listed for 5 chaos in Covens"
+    },
+    "item": {
+     "verified": true,
+     "league": "Covens",
+     "id": "75eaeba88dd29315cec62c6373362f570bfe6d726b491a8555c38aa380e2f652",
+     "name": "Tabula Rasa",
+     "typeLine": "Simple Robe",
+     "baseType": "Simple Robe",
+     "rarity": "Unique",
+     "ilvl": 84,
+     "identified": true,
+     "frameType": 3
+    }
+   },
+   {
+    "id": "4cdc5ec1850fb06357cb454b97a457df19a7cfd44c19f9219e070b9bb0a9670d",
+    "listing": {
+     "method": "psapi",
+     "indexed": "2026-11-22T17:01:04Z",
+     "stash": {
+      "name": "~price",
+      "x": 28,
+      "y": 0
+     },
+     "price": {
+      "type": "~price",
+      "amount": 5,
+      "currency": "chaos"
+     },
+     "account": {
+      "name": "account7#0000",
+      "online": {
+       "league": "Covens"
+      },
+      "lastCharacterName": "character7",
+      "language": "en_US",
+      "realm": "pc"
+     },
+     "whisper": "@character7 Hi, I would like to buy your Tabula Rasa Simple Robe listed for 5 chaos in Covens"
+    },
+    "item": {
+     "verified": true,
+     "league": "Covens",
+     "id": "4cdc5ec1850fb06357cb454b97a457df19a7cfd44c19f9219e070b9bb0a9670d",
+     "name": "Tabula Rasa",
+     "typeLine": "Simple Robe",
+     "baseType": "Simple Robe",
+     "rarity": "Unique",
+     "ilvl": 86,
+     "identified": true,
+     "frameType": 3
+    }
+   },
+   {
+    "id": "8a16b71c2fbfad7d05f2edd26279a0884387e83d501936eafb1e64d3a22df50f",
+    "listing": {
+     "method": "psapi",
+     "indexed": "2026-11-22T20:49:50Z",
+     "stash": {
+      "name": "~price",
+      "x": 10,
+      "y": 15
+     },
+     "price": {
+      "type": "~price",
+      "amount": 6,
+      "currency": "chaos"
+     },
+     "account": {
+      "name": "account8#0000",
+      "online": {
+       "league": "Covens",
+       "status": "afk"
+      },
+      "lastCharacterName": "character8",
+      "language": "en_US",
+      "realm": "pc"
+     },
+     "whisper": "@character8 Hi, I would like to buy your Tabula Rasa Simple Robe listed for 6 chaos in Covens"
+    },
+    "item": {
+     "verified": true,
+     "league": "Covens",
+     "id": "8a16b71c2fbfad7d05f2edd26279a0884387e83d501936eafb1e64d3a22df50f",
+     "name": "",
+     "typeLine": "Simple Robe",
+     "baseType": "Simple Robe",
+     "rarity": "Unique",
+     "ilvl": 87,
+     "identified": false,
+     "frameType": 3
+    }
+   },
+   {
+    "id": "ebab41d16a82ad2996a4b4f0214dbfb6d431b48a24b4d48429d7f8e442f89271",
+    "listing": {
+     "method": "psapi",
+     "indexed": "2026-11-23T06:30:16Z",
+     "stash": {
+      "name": "~price",
+      "x": 28,
+      "y": 0
+     },
+     "price": {
+      "type": "~price",
+      "amount": 6,
+      "currency": "chaos"
+     },
+     "account": {
+      "name": "account9#0000",
+      "online": {
+       "league": "Covens"
+      },
+      "lastCharacterName": "character9",
+      "language": "en_US",
+      "realm": "pc"
+     },
+     "whisper": "@character9 Hi, I would like to buy your Tabula Rasa Simple Robe listed for 6 chaos in Covens"
+    },
+    "item": {
+     "verified": true,
+     "league": "Covens",
+     "id": "ebab41d16a82ad2996a4b4f0214dbfb6d431b48a24b4d48429d7f8e442f89271",
+     "name": "Tabula Rasa",
+     "typeLine": "Simple Robe",
+     "baseType": "Simple Robe",
+     "rarity": "Unique",
+     "ilvl": 83,
+     "identified": true,
+     "frameType": 3
+    }
+   }
+  ]
+ }
+}

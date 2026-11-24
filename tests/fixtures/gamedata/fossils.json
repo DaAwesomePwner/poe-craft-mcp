@@ -1,0 +1,87 @@
+{
+ "Metadata/Items/Currency/CurrencyDelveCraftingFire": {
+  "added_mods": [],
+  "allowed_tags": [],
+  "blocked_descriptions": {
+   "GreatlyMoreCold": "Greatly more Cold modifiers",
+   "MoreCold": "More Cold modifiers"
+  },
+  "changes_quality": false,
+  "corrupted_essence_chance": 0,
+  "descriptions": {
+   "MoreFire": "More Fire modifiers",
+   "NoCold": "No Cold modifiers"
+  },
+  "forbidden_tags": [],
+  "forced_mods": [],
+  "mirrors": false,
+  "name": "Scorched Fossil",
+  "negative_mod_weights": [
+   {
+    "tag": "cold",
+    "weight": 0
+   }
+  ],
+  "positive_mod_weights": [
+   {
+    "tag": "fire",
+    "weight": 1000
+   }
+  ],
+  "rolls_lucky": false,
+  "rolls_white_sockets": false,
+  "sell_price_mods": []
+ },
+ "Metadata/Items/Currency/CurrencyDelveCraftingLife": {
+  "added_mods": [],
+  "allowed_tags": [],
+  "blocked_descriptions": {
+   "GreatlyMoreDefences": "Greatly more Defences modifiers",
+   "MoreDefences": "More Defence modifiers"
+  },
+  "changes_quality": false,
+  "corrupted_essence_chance": 0,
+  "descriptions": {
+   "MoreLife": "More Life modifiers",
+   "NoDefences": "No Defence modifiers"
+  },
+  "forbidden_tags": [],
+  "forced_mods": [],
+  "mirrors": false,
+  "name": "Pristine Fossil",
+  "negative_mod_weights": [
+   {
+    "tag": "defences",
+    "weight": 0
+   }
+  ],
+  "positive_mod_weights": [
+   {
+    "tag": "life",
+    "weight": 1000
+   }
+  ],
+  "rolls_lucky": false,
+  "rolls_white_sockets": false,
+  "sell_price_mods": []
+ },
+ "Metadata/Items/Currency/CurrencyDelveCraftingLuckyModRolls": {
+  "added_mods": [],
+  "allowed_tags": [],
+  "blocked_descriptions": {},
+  "changes_quality": false,
+  "corrupted_essence_chance": 0,
+  "descriptions": {
+   "LuckyMods": "Numeric modifier values are lucky\r\nHigh Level modifiers are more common"
+  },
+  "forbidden_tags": [],
+  "forced_mods": [],
+  "mirrors": false,
+  "name": "Sanctified Fossil",
+  "negative_mod_weights": [],
+  "positive_mod_weights": [],
+  "rolls_lucky": true,
+  "rolls_white_sockets": false,
+  "sell_price_mods": []
+ }
+}
