@@ -10,8 +10,8 @@ sources:
 requires: []
 budget_div: 0.2
 base:
-  # Cheapest online normal (white) Granite Flask, item level 84 or higher.
-  trade_url: "https://www.pathofexile.com/trade/search/Covens/H4sIAAAAAAACCnVOSwoCMQy9imQ9SxcyB9BDyCChVgh20ppmhFJ6d9uqUBfu3pf3Mjw2KwnmDFFRt9iQD0qeYQbPjthCmUBTsFU4CTKp3R0dxjtMvVMr5_wNIF-rfCOnVpqxlGWgGVaK5jLwAZJ7unekTh_2pXxm_8QFhTT93GUvKzoopXejF212EDL9WjTVegFRVB1M8QAAAA"
+  # Cheapest online normal (white), not corrupted Granite Flask of item level exactly 84 (85 would add Cheetah to the suffix pool).
+  trade_url: "https://www.pathofexile.com/trade/search/Covens/H4sIAAAAAAACCnWPQQrCQAxFryJZd-lCegA9hBQJ0ykE05kxScUy9O7OVIV24e4nPy_5yfCYvMzQZlBDm7SqmIxigBZiYAoelgZsTr40LoKBzB_OjHqHZmUKcs2_AQx9aQ_E5qUa3dJtygwjqbtt6o0kfvJnpJw-HRsY8VVFue6iyJTM97t0A7KWcMs33p-1gkI278AQZUSuZGU1ilU7Cbn1BXXFegM4ro39GQEAAA"
 steps:
   - action: transmute
     materials:
@@ -37,15 +37,17 @@ outcomes:
     trade_url: "https://www.pathofexile.com/trade/search/Covens/H4sIAAAAAAACCm2O3QrCMAyFX0VyPYT91bkH0IcQkbplEKxdbTNxjL676cQrJTfh5HznZIHHhH6GdoHAmqeQttExjRZaGK0hixAz4NmhCEevLTFuDkaHG2QrI8hp-Rq07UUeyDD6z4F6kfHlDHXE2wRc8ropdkWjqlq8T20mTK13kspSunoK-mpQuEGbgDH7H6L2pcrLSlU_IbX6k3KWkYdHz8nnPHXrv6GDGN_JlFTHBgEAAA"
   - name: "of the Armadillo with another prefix"
     probability: 0.9736842
-    use_salvage: true
+    # Not corrupted, 56%+ Armour during Effect, one prefix, and NOT "Gain 3 Charges when you are Hit".
+    trade_url: "https://www.pathofexile.com/trade/search/Covens/H4sIAAAAAAACCo2QTWrDMBCFr1K0NgHHtprmAO0hShCKNIahsqRKo5JgfPeOnBQMyaLaaP7eN8ObxXeBdBXHWWTSVHKNQiQMXhxF8A49iKURdI3AhY-kPRK8vDudv0SzaljyOf8NaG-5PKIjSLcGWi7DJTo0SLsqUK1862Tb9bLn2R_tCtStE_LKQfIyi1mfHbBw1C7D0twpMUOxYXf7lC_TGZIKo4oJRryoKdj8AGyf8E6VeD_YB_rHwcNh_7o_yH544HdP-acNsg5mozb5JjQhpRKpaje-rxix1Mceh0S1GxOa1eJsuPULMv3ExLkBAAA"
 salvage:
-  # Granite Flask with 56%+ Armour during Effect and NOT "Gain 3 Charges when you are Hit".
-  trade_url: "https://www.pathofexile.com/trade/search/Covens/H4sIAAAAAAACCo2PTQrCQAxGryJZF6F_Y-0B9BAiMrYpBMeZOpOKpczdTSu60YW78OV7eWSC24B-hHqCwJqHME-uZ3IWanDWkEWICfDYowR7ry0xrnZGhwskCyPIYXoXtG0l7sgw-teCWonx0RtqiNczcErVNldpXqhCundtBpytVxJlqUTWUtBngwJ22gSMx5h8BNbxH4KyyjZZpYryS5D_vC8GCM7zXOs9NcsroYEYn1WRd74hAQAA"
+  # Not used: every result of the procedure is sold through one of the two searches above.
+  fixed_chaos: 0
 minutes: 7
 notes: >-
   What you make: a magic Granite Flask with the prefix Flagellant's (Gain 3 Charges when you are
   Hit by an Enemy, needs item level 80) and the suffix of the Armadillo (56-60% increased Armour
-  during Effect, needs item level 84). Buy a white Granite Flask of item level 84+ (check "Item
+  during Effect, needs item level 84). Buy a white, uncorrupted Granite Flask of item level exactly
+  84 (an 85 adds of the Cheetah to the suffix pool and changes the odds; check "Item
   Level", not "Requires Level").
   Steps. (1) Use one Orb of Transmutation to make it magic. (2) Use Orbs of Alteration
   repeatedly; stop as soon as "of the Armadillo" appears. Per the 3.30 export weights each
@@ -60,10 +62,10 @@ notes: >-
   0.004462/0.010584 = 0.4215 of the time (that is the Augmentation quantity). In both cases the
   prefix is drawn in proportion to prefix weight, so it is Flagellant's with chance 600/22800 =
   0.0263158 (1 in 38); otherwise (0.9736842) you sell an Armadillo flask with another prefix,
-  priced by the salvage search. The guide's own route keeps alt+aug spamming until both mods are
+  priced by its own sale search (that flask, one non-Flagellant prefix, not corrupted). The guide's own route keeps alt+aug spamming until both mods are
   on the flask; by the same weights that is 0.000322 per alteration (about 3103 alterations plus
   0.0080 Augmentations per alteration) and is not modelled here.
   Minutes (estimate, not from the guide): about 95 alterations at 2-3 s each (4 min) plus buying
   the base and listing the flask (3 min). Price quality and enchants separately; the searches
   ignore them. Verify in game: the mod names/tiers on the flask, the item level, and that the
-  sale and salvage searches show flasks you would really sell against.
+  two sale searches show flasks you would really sell against.
