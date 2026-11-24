@@ -35,7 +35,7 @@ There are four sources. Only poe.ninja and the trade site are live. The other tw
 | Source | What it gives | How to call it | Refresh |
 | --- | --- | --- | --- |
 | [poe.ninja economy API](https://poe.ninja/docs/api) | League id, chaos:divine rate, prices of currency and materials, base type prices | `GET /poe1/api/economy/leagues`; `GET /poe1/api/economy/exchange/current/overview?league=&type=`; `GET /poe1/api/economy/stash/current/item/overview?league=&type=` | Every 15 min at most |
-| Trade site (unofficial web API) | Sale price of finished items and salvage | `GET /api/trade/search/{league}/{savedId}` turns a saved trade URL into its query JSON; `POST /api/trade/search/{league}` returns result ids; `GET /api/trade/fetch/{id1,...}?query={searchId}` returns listings (10 ids per call); `POST /api/trade/exchange/{league}` for bulk items | On demand, cached 15 to 30 min per query |
+| Trade site (unofficial web API) | Sale price of finished items and salvage | `GET /api/trade/search/{league}/{savedId}` turns a saved trade URL into its query JSON; `POST /api/trade/search/{league}` returns result ids; `GET /api/trade/fetch/{id1,...}?query={searchId}` returns listings (10 ids per call); `POST /api/trade/exchange/{league}` for bulk items (2026-11-24: no longer used; exchange offers are whisper-only, see docs/decisions.md "Trade pricing") | On demand, cached 15 to 30 min per query |
 | Game data export ([RePoE fork](https://github.com/lvlvllvlvllvlvl/RePoE)) | Mods, spawn weights, base items, essences, fossils, bench crafts, stat text | Download its JSON files (`mods.json`, `base_items.json`, `essences.json`, `fossils.json`, `crafting_bench_options.json`, `stat_translations.json`) into `data/gamedata/` | Once per patch, by hand |
 | Recipe knowledge base | Which crafts exist, their steps, materials, odds and outputs | YAML files in `recipes/`, curated by the user from guides | When the user adds or edits recipes |
 
@@ -50,7 +50,7 @@ There are four sources. Only poe.ninja and the trade site are live. The other tw
 **Trade site details**
 
 - The user builds each output search once on pathofexile.com/trade and pastes its URL into the recipe. The server turns the URL into query JSON and swaps in the current league id.
-- Pricing an output = run the search (sorted by price, online sellers only, optionally "instant buyout"), fetch the cheapest 20 to 40 listings, convert each price to chaos with poe.ninja rates, drop outliers, and return p10, p25, median and the listing count.
+- Pricing an output = run the search (sorted by price, online sellers only, optionally "instant buyout"), fetch the cheapest 20 to 40 listings, convert each price to chaos with poe.ninja rates, drop outliers, and return p10, p25, median and the listing count. (2026-11-24: superseded; pricing now uses instant-buyout listings only, no online filter and no exchange, see docs/decisions.md "Trade pricing".)
 - A `POESESSID` cookie is optional. With it, limits apply per account, not per IP. It gives full access to the account, so treat it as a password (see Caching, rate limits and secrets).
 
 **Game data details**

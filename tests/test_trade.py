@@ -121,14 +121,14 @@ async def test_missing_saved_search_raises_trade_error(trade: TradeClient) -> No
 async def test_fetch_batches_of_ten_and_normalizes(trade: TradeClient, config: Config) -> None:
     _, fetch = mock_search_and_fetch()
     ids = [f"id{i}" for i in range(25)]
-    listings, not_buyout = await trade.fetch(ids, "Q1")
+    listings, not_buyout, unpriced = await trade.fetch(ids, "Q1")
     assert fetch.call_count == 3
     batches = [call.request.url.path.rsplit("/", 1)[1].split(",") for call in fetch.calls]
     assert [len(b) for b in batches] == [10, 10, 5]
     assert all(call.request.url.params["query"] == "Q1" for call in fetch.calls)
     assert all(c.request.headers["User-Agent"] == config.user_agent for c in fetch.calls)
     assert all("Cookie" not in call.request.headers for call in fetch.calls)
-    assert (len(listings), not_buyout) == (30, 0)
+    assert (len(listings), not_buyout, unpriced) == (30, 0, 0)
     first = listings[0]
     assert set(first) == {"id", "amount", "currency", "indexed", "stack_size"}
     assert (first["amount"], first["currency"]) == (5.0, "chaos")
@@ -216,6 +216,25 @@ async def test_listings_without_the_buyout_fee_are_dropped_and_counted(
     assert kept == {entry["id"] for entry in body["result"][4:]}
     cached = await trade.listings_for("Covens", SAVED_URL, sample=10)
     assert (cached["from_cache"], cached["dropped_not_instant_buyout"]) == (True, 4)
+
+
+@respx.mock
+async def test_mixed_batch_counts_each_drop_and_keeps_the_buyout(trade: TradeClient) -> None:
+    buyout, unpriced_whisper, bad_whisper, unpriced_buyout = (
+        json.loads(json.dumps(e)) for e in fixture("fetch")["body"]["result"][:4]
+    )
+    del unpriced_whisper["listing"]["fee"]
+    del unpriced_whisper["listing"]["price"]
+    del bad_whisper["listing"]["fee"]
+    bad_whisper["listing"]["price"] = {"type": "~price", "amount": "five", "currency": "chaos"}
+    unpriced_buyout["listing"]["price"]["amount"] = "lots"
+    batch = [buyout, unpriced_whisper, bad_whisper, None, unpriced_buyout]
+    respx.post(f"{BASE}/api/trade/search/Covens").mock(return_value=recorded("search"))
+    respx.get(url__startswith=f"{BASE}/api/trade/fetch/").respond(200, json={"result": batch})
+    result = await trade.listings_for("Covens", SAVED_URL, sample=5)
+    assert [listing["id"] for listing in result["listings"]] == [buyout["id"]]
+    assert result["listings"][0]["amount"] == 5.0
+    assert (result["dropped_not_instant_buyout"], result["dropped_unpriced"]) == (2, 2)
 
 
 @respx.mock

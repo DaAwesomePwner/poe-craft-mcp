@@ -194,25 +194,31 @@ class TradeClient:
 
     async def fetch(
         self, ids: list[str], search_id: str, *, deadline: float | None = None
-    ) -> tuple[list[dict[str, Any]], int]:
-        """Normalized instant-buyout listings for `ids`, `FETCH_BATCH` per request, all
-        within one deadline, plus the number of listings dropped as not instant buyout."""
+    ) -> tuple[list[dict[str, Any]], int, int]:
+        """`(listings, not_instant_buyout, unpriced)` for `ids`, `FETCH_BATCH` per request,
+        all within one deadline.
+
+        The fee is checked before anything else, so every listing without it (priced or
+        not, well-formed or not) counts as not instant buyout. `unpriced` counts null
+        (delisted) entries and instant-buyout listings without a usable price.
+        """
         deadline = self.limiter.deadline() if deadline is None else deadline
-        listings, not_buyout = [], 0
+        listings, not_buyout, unpriced = [], 0, 0
         for start in range(0, len(ids), FETCH_BATCH):
             path = FETCH_PATH.format(ids=",".join(ids[start : start + FETCH_BATCH]))
             data = await self._request(
                 "fetch", "GET", path, params={"query": search_id}, deadline=deadline
             )
             for entry in data.get("result") or []:
+                if isinstance(entry, dict) and not is_instant_buyout(entry):
+                    not_buyout += 1
+                    continue
                 listing = normalize_listing(entry)
                 if listing is None:
-                    continue
-                if is_instant_buyout(entry):
-                    listings.append(listing)
+                    unpriced += 1
                 else:
-                    not_buyout += 1
-        return listings, not_buyout
+                    listings.append(listing)
+        return listings, not_buyout, unpriced
 
     async def listings_for(
         self,
@@ -230,8 +236,8 @@ class TradeClient:
         `cache_only` never makes a request: it returns any cached copy (marked `stale` once
         older than `trade_cache_min`) or raises `NotCached`.
 
-        Returns `{listings, total, search_id, dropped_not_instant_buyout, age_seconds,
-        from_cache, stale}`. Raises `RateLimited` or `TradeError` only when there is no
+        Returns `{listings, total, search_id, dropped_not_instant_buyout, dropped_unpriced,
+        age_seconds, from_cache, stale}`. Raises `RateLimited` or `TradeError` only when there is no
         cached copy to fall back on, and `ValueError` for a bulk exchange URL (whisper-only
         listings). All requests share one deadline: the caller's, else `max_wait_s` from now.
         """
@@ -257,7 +263,7 @@ class TradeClient:
             raise NotCached("trade listings are not cached")
         try:
             found = await self.search(league, tq.query, PRICE_SORT, deadline=deadline)
-            listings, not_buyout = await self.fetch(
+            listings, not_buyout, unpriced = await self.fetch(
                 found.result[:sample], found.id, deadline=deadline
             )
         except (RateLimited, TradeError) as exc:
@@ -270,6 +276,7 @@ class TradeClient:
             "total": found.total,
             "search_id": found.id,
             "dropped_not_instant_buyout": not_buyout,
+            "dropped_unpriced": unpriced,
         }
         await self.cache.put(key, json.dumps(payload))
         return {**payload, "age_seconds": 0.0, "from_cache": False, "stale": False}

@@ -144,20 +144,27 @@ def is_instant_buyout(entry: Any) -> bool:
 def normalize_listing(entry: Any) -> dict[str, Any] | None:
     """One fetch result -> `{id, amount, currency, indexed, stack_size}`.
 
-    Returns None for delisted (null) entries and listings without a price. Account and
+    Returns None for delisted (null) entries and listings without a usable price (missing
+    or non-numeric amount, missing currency); never raises on malformed input. Account and
     character names are dropped.
     """
     if not isinstance(entry, dict):
         return None
-    listing = entry.get("listing") or {}
-    price = listing.get("price") or {}
-    if price.get("amount") is None or not price.get("currency"):
+    listing = entry.get("listing")
+    price = listing.get("price") if isinstance(listing, dict) else None
+    if not isinstance(price, dict):
         return None
-    item = entry.get("item") or {}
+    amount, currency = price.get("amount"), price.get("currency")
+    if not isinstance(amount, int | float) or isinstance(amount, bool):
+        return None
+    if not isinstance(currency, str) or not currency:
+        return None
+    item = entry.get("item")
+    item = item if isinstance(item, dict) else {}
     return {
         "id": entry.get("id"),
-        "amount": float(price["amount"]),
-        "currency": price["currency"],
+        "amount": float(amount),
+        "currency": currency,
         "indexed": listing.get("indexed"),
         "stack_size": item.get("stackSize"),
     }
