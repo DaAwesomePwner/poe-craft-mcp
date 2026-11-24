@@ -1,0 +1,15 @@
+{
+ "Metadata/Items/Currency/CurrencyEssenceGreed1": {
+  "item_level_restriction": 35,
+  "level": 1,
+  "mods": {
+   "Body Armour": "IncreasedLife1"
+  },
+  "name": "Whispering Essence of Greed",
+  "spawn_level_min": 1,
+  "type": {
+   "is_corruption_only": false,
+   "tier": 1
+  }
+ }
+}
