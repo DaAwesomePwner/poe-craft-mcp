@@ -121,12 +121,19 @@ This product isn't affiliated with or endorsed by Grinding Gear Games in any way
 - "Price this trade search: `<trade URL>`"
 - "What's my chance per attempt of rolling `<mod id>` on a Vaal Regalia at ilvl 84 with chaos orbs?"
 
-**What to expect on a fresh clone.** The three files in `recipes/` are structural templates,
-not working crafts. They are `unverified`, so rankings and `list_recipes` hide them by default,
-and each contains placeholders (`<league>`/`<...>` trade URLs, a `<mod id>`, example guide
-URLs). **They will not rank until you replace those placeholders**, even with
-`include_unverified` on. A first question like "best craft for 30 div" will answer that there
-are no rankable recipes. That is expected.
+**What to expect on a fresh clone.** `recipes/` holds two kinds of files, all `unverified`, so
+rankings and `list_recipes` hide them by default:
+
+- three `example-*` structural templates, not working crafts, with placeholders
+  (`<league>`/`<...>` trade URLs, a `<mod id>`, example guide URLs). **They will not rank until
+  you replace those placeholders**, even with `include_unverified` on;
+- three starter crafts drafted from public guides with real trade searches and odds from the
+  game data (two utility flasks and a fossil-crafted minion wand). They evaluate live, but
+  nobody has checked them in game; see [docs/starter-recipes.md](docs/starter-recipes.md) for
+  what they are, how their odds were derived and what to verify.
+
+A first question like "best craft for 30 div" may still answer that nothing is rankable (only
+unverified recipes, or a sale with too few listings). That is expected.
 
 ## Your first ranked answer
 
@@ -277,7 +284,7 @@ key. The ones you are most likely to change:
 
 | Symptom | Fix |
 | --- | --- |
-| "no verified recipes" or an empty ranking | The shipped examples are unverified templates with placeholders. Follow [Your first ranked answer](#your-first-ranked-answer): replace the placeholders, then rank with `include_unverified` or verify the recipe. `list_recipes` shows how many are hidden |
+| "no verified recipes" or an empty ranking | The shipped recipes are unverified: the examples are templates with placeholders, the starter crafts need checking in game (see [docs/starter-recipes.md](docs/starter-recipes.md)). Follow [Your first ranked answer](#your-first-ranked-answer): replace the placeholders, then rank with `include_unverified` or verify the recipe. `list_recipes` shows how many are hidden |
 | `list_recipes` shows `load_errors` | A recipe file failed validation and was skipped; the `reason` names the problem. Common: unquoted `verified_patch`, probabilities not summing to 1, an unknown key |
 | "no recipes loaded" | The server cannot find `recipes/`. Launch with `uv --directory <repo> run poe-craft-mcp`, or set `POE_CRAFT_RECIPES` |
 | Game data missing, or `mod_odds` fails | Run `uv run python scripts/fetch_gamedata.py` |

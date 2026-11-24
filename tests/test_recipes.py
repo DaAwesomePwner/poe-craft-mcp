@@ -43,14 +43,15 @@ def test_schema_ships_as_package_data() -> None:
 def test_example_recipes_load_and_are_unverified() -> None:
     store = RecipeStore.load(REPO_RECIPES)
     assert store.errors == []
-    assert store.ids() == [
+    examples = [store.recipes[i] for i in store.ids() if i.startswith("example-")]
+    assert [r.id for r in examples] == [
         "example-essence-spam-body-armour",
         "example-fossil-crafted-ring",
         "example-stygian-vise-base-flip",
     ]
-    tags = {tag for recipe in store.recipes.values() for tag in recipe.tags}
+    tags = {tag for recipe in examples for tag in recipe.tags}
     assert {"essence", "fossil", "base-flip"} <= tags
-    for recipe in store.recipes.values():
+    for recipe in examples:
         assert recipe.status == "unverified"
         assert recipe.verified_patch is None
         assert not recipe.is_verified

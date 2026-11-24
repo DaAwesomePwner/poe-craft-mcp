@@ -1,0 +1,71 @@
+# Starter recipe built from a 3.30 guide; odds from the RePoE 3.30.0.4.3 export. NOT verified in game.
+id: granite-flagellants-armadillo
+name: Granite Flask, Flagellant's + of the Armadillo (alt + aug)
+tags: [flask, alt, starter]
+status: unverified
+verified_patch: null
+sources:
+  - "https://exilesfoundry.com/blog/poe-league-start-profit-crafting/"
+  - "https://poe-vault.com/guides/ultimate-flask-crafting-guide"
+requires: []
+budget_div: 0.2
+base:
+  # Cheapest online normal (white), not corrupted Granite Flask of item level exactly 84 (85 would add Cheetah to the suffix pool).
+  trade_url: "https://www.pathofexile.com/trade/search/Covens/H4sIAAAAAAACCnWPQQrCQAxFryJZd-lCegA9hBQJ0ykE05kxScUy9O7OVIV24e4nPy_5yfCYvMzQZlBDm7SqmIxigBZiYAoelgZsTr40LoKBzB_OjHqHZmUKcs2_AQx9aQ_E5qUa3dJtygwjqbtt6o0kfvJnpJw-HRsY8VVFue6iyJTM97t0A7KWcMs33p-1gkI278AQZUSuZGU1ilU7Cbn1BXXFegM4ro39GQEAAA"
+steps:
+  - action: transmute
+    materials:
+      - { source: ninja, category: Currency, name: "Orb of Transmutation", qty: 1 }
+  - action: alt_spam
+    materials:
+      - { source: ninja, category: Currency, name: "Orb of Alteration", qty: 1 }
+    repeat_until: "the flask shows of the Armadillo (56-60% increased Armour during Effect)"
+    p_success:
+      p_source: weights
+      method: alt
+      target_mods: ["FlaskBuffArmourWhileHealing4"]
+      base: "Granite Flask"
+      ilvl: 84
+  - action: augment_if_prefix_empty
+    materials:
+      # Used only when the Armadillo came alone (0.4215 of the time, see notes).
+      - { source: ninja, category: Currency, name: "Orb of Augmentation", qty: 0.4215 }
+outcomes:
+  - name: "Flagellant's + of the Armadillo"
+    probability: 0.0263158
+    # Granite Flask with "Gain 3 Charges when you are Hit" and 56%+ Armour during Effect.
+    trade_url: "https://www.pathofexile.com/trade/search/Covens/H4sIAAAAAAACCm2O3QrCMAyFX0VyPYT91bkH0IcQkbplEKxdbTNxjL676cQrJTfh5HznZIHHhH6GdoHAmqeQttExjRZaGK0hixAz4NmhCEevLTFuDkaHG2QrI8hp-Rq07UUeyDD6z4F6kfHlDHXE2wRc8ropdkWjqlq8T20mTK13kspSunoK-mpQuEGbgDH7H6L2pcrLSlU_IbX6k3KWkYdHz8nnPHXrv6GDGN_JlFTHBgEAAA"
+  - name: "of the Armadillo with another prefix"
+    probability: 0.9736842
+    # Not corrupted, 56%+ Armour during Effect, one prefix, and NOT "Gain 3 Charges when you are Hit".
+    trade_url: "https://www.pathofexile.com/trade/search/Covens/H4sIAAAAAAACCo2QTWrDMBCFr1K0NgHHtprmAO0hShCKNIahsqRKo5JgfPeOnBQMyaLaaP7eN8ObxXeBdBXHWWTSVHKNQiQMXhxF8A49iKURdI3AhY-kPRK8vDudv0SzaljyOf8NaG-5PKIjSLcGWi7DJTo0SLsqUK1862Tb9bLn2R_tCtStE_LKQfIyi1mfHbBw1C7D0twpMUOxYXf7lC_TGZIKo4oJRryoKdj8AGyf8E6VeD_YB_rHwcNh_7o_yH544HdP-acNsg5mozb5JjQhpRKpaje-rxix1Mceh0S1GxOa1eJsuPULMv3ExLkBAAA"
+salvage:
+  # Not used: every result of the procedure is sold through one of the two searches above.
+  fixed_chaos: 0
+minutes: 7
+notes: >-
+  What you make: a magic Granite Flask with the prefix Flagellant's (Gain 3 Charges when you are
+  Hit by an Enemy, needs item level 80) and the suffix of the Armadillo (56-60% increased Armour
+  during Effect, needs item level 84). Buy a white, uncorrupted Granite Flask of item level exactly
+  84 (an 85 adds of the Cheetah to the suffix pool and changes the odds; check "Item
+  Level", not "Requires Level").
+  Steps. (1) Use one Orb of Transmutation to make it magic. (2) Use Orbs of Alteration
+  repeatedly; stop as soon as "of the Armadillo" appears. Per the 3.30 export weights each
+  alteration hits it with chance 0.01058 (mod_odds, alt, ilvl 84), about 94.5 alterations on
+  average. (3) If the flask has only the Armadillo suffix, use one Orb of Augmentation to add a
+  prefix. If the alteration already gave a prefix, keep the flask as it is. Then sell it.
+  How the odds are derived (export weights at ilvl 84, no guess): all mods weigh 84050,
+  suffixes 61250, prefixes 22800; Armadillo weighs 750 and Flagellant's 600. Alteration gives 1
+  or 2 affixes (50/50, the tool's assumption). Chance of a lone Armadillo = 0.5 x 750/84050 =
+  0.004462; chance of Armadillo plus a prefix = 0.5 x (750/84050 + 22800/84050 x 750/61250) =
+  0.006122; together 0.010584 (= the mod_odds value). So when you stop, the Armadillo is alone
+  0.004462/0.010584 = 0.4215 of the time (that is the Augmentation quantity). In both cases the
+  prefix is drawn in proportion to prefix weight, so it is Flagellant's with chance 600/22800 =
+  0.0263158 (1 in 38); otherwise (0.9736842) you sell an Armadillo flask with another prefix,
+  priced by its own sale search (that flask, one non-Flagellant prefix, not corrupted). The guide's own route keeps alt+aug spamming until both mods are
+  on the flask; by the same weights that is 0.000322 per alteration (about 3103 alterations plus
+  0.0080 Augmentations per alteration) and is not modelled here.
+  Minutes (estimate, not from the guide): about 95 alterations at 2-3 s each (4 min) plus buying
+  the base and listing the flask (3 min). Price quality and enchants separately; the searches
+  ignore them. Verify in game: the mod names/tiers on the flask, the item level, and that the
+  two sale searches show flasks you would really sell against.

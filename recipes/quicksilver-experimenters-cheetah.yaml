@@ -1,0 +1,71 @@
+# Starter recipe built from a 3.30 guide; odds from the RePoE 3.30.0.4.3 export. NOT verified in game.
+id: quicksilver-experimenters-cheetah
+name: Quicksilver Flask, Experimenter's + of the Cheetah (alt + aug)
+tags: [flask, alt, starter]
+status: unverified
+verified_patch: null
+sources:
+  - "https://exilesfoundry.com/blog/poe-league-start-profit-crafting/"
+  - "https://poe-vault.com/guides/ultimate-flask-crafting-guide"
+requires: []
+budget_div: 0.2
+base:
+  # Cheapest online normal (white), not corrupted Quicksilver Flask, item level 85 or higher.
+  trade_url: "https://www.pathofexile.com/trade/search/Covens/H4sIAAAAAAACCnWOsQrDMAxEf6Vozloo-YDunUsoxnFAxLFdSS4E43-vnLaQDN10Or3TFXhmRyv0BViMZG5TTIIxQA8xeAwOageyJqeLW0Y7M_qXo9PVG56h2zjF7uV3ZMKo6wm9OGrGUIedLLAg28dO70ZN9p8TfX8562MbiXISNx6KTcaz9qrfZn_SyBDKegBDpMX4RjaWI0mzE6HdmrNV6w0LMjRBFAEAAA"
+steps:
+  - action: transmute
+    materials:
+      - { source: ninja, category: Currency, name: "Orb of Transmutation", qty: 1 }
+  - action: alt_spam
+    materials:
+      - { source: ninja, category: Currency, name: "Orb of Alteration", qty: 1 }
+    repeat_until: "the flask shows of the Cheetah (12-14% increased Movement Speed during Effect)"
+    p_success:
+      p_source: weights
+      method: alt
+      target_mods: ["FlaskBuffMovementSpeedWhileHealing3"]
+      base: "Quicksilver Flask"
+      ilvl: 85
+  - action: augment_if_prefix_empty
+    materials:
+      # Used only when the Cheetah came alone (0.4226 of the time, see notes), so 0.4226 per attempt.
+      - { source: ninja, category: Currency, name: "Orb of Augmentation", qty: 0.4226 }
+outcomes:
+  - name: "Experimenter's + of the Cheetah"
+    probability: 0.0263158
+    # Quicksilver Flask with 36%+ increased Duration and 12%+ Movement Speed during Effect.
+    trade_url: "https://www.pathofexile.com/trade/search/Covens/H4sIAAAAAAACCm2OzQrCQAyEX0VyLuK29s8H8O5ZRNY2hdC1W_enWMq-u9mKJ0suYTLfTBZ4eTQznBawTjpv46ZHR3qAE-hB0YAQEnDziCxcPDW9JTWh2Z2VtD0kK8fYdfmZ5NCy3JFyaL4HalnG96ioIbePwF2keVGKWlQFeyepPMbmJ3FtVnBhS1Y-FDLYSWUxJJspmajSY13l5eEvRaQbKTce_lgbF32joWZ92DYQwgcIZB27CwEAAA"
+  - name: "of the Cheetah with another prefix"
+    probability: 0.9736842
+    # Not corrupted, 12%+ Movement Speed during Effect, one prefix, and NOT 36%+ increased Duration.
+    trade_url: "https://www.pathofexile.com/trade/search/Covens/H4sIAAAAAAACCoWQ3YrCMBCFX2XJdZFN1Vp9gL3f60VCTKcwmCbZTCJK6bs7qS4UFDY3mb_znWFG8Zsh3sRhFJR0ylQiHxJ6Jw7CO4sOxFSJdAvAhe-M5kxoLxA_vqyms6hmHct-xr8h7Tou92gTxEcDOy7DNVg0mFZFoNayrTf7drv75NmLthmK84BsK2s27JD0yQILe20JpupJCQS586vHp1weThCV71WI0ONVDb6jV-Ab3rEQnws7n_5fWNbbZif3sm1e-OvmrcFxwSyTZNQiX4TGx5hDKtrF8WeMmMrjI_uYSjdENPONyXDrDgN-vi--AQAA"
+salvage:
+  # Not used: every result of the procedure is sold through one of the two searches above.
+  fixed_chaos: 0
+minutes: 6
+notes: >-
+  What you make: a magic Quicksilver Flask with the prefix Experimenter's (36-40% increased
+  Duration, needs item level 84) and the suffix of the Cheetah (12-14% increased Movement Speed
+  during Effect, needs item level 85). Buy a white Quicksilver Flask of item level 85+ (hover
+  the item or check "Item Level" on trade; "Requires Level" is something else). It must not be
+  corrupted: a corrupted flask cannot be changed with currency.
+  Steps. (1) Use one Orb of Transmutation to make it magic. (2) Use Orbs of Alteration
+  repeatedly; stop as soon as "of the Cheetah" appears. Per the 3.30 export weights each
+  alteration hits it with chance 0.01391 (mod_odds, alt, ilvl 85), about 72 alterations on
+  average. (3) If the flask has only the Cheetah suffix, use one Orb of Augmentation to add a
+  prefix. If the alteration already gave a prefix, keep the flask as it is. Then sell it.
+  How the odds are derived (export weights at ilvl 85, no guess): all mods weigh 85050,
+  suffixes 62250, prefixes 22800; Cheetah weighs 1000 and Experimenter's 600. Alteration gives
+  1 or 2 affixes (50/50, the tool's assumption). Chance of a lone Cheetah = 0.5 x 1000/85050 =
+  0.005879; chance of Cheetah plus a prefix = 0.5 x (1000/85050 + 22800/85050 x 1000/62250) =
+  0.008032; together 0.013911 (= the mod_odds value). So when you stop, the Cheetah is alone
+  0.005879/0.013911 = 0.4226 of the time (that is the Augmentation quantity). In both cases
+  the prefix is drawn in proportion to prefix weight, so it is Experimenter's with chance
+  600/22800 = 0.0263158 (1 in 38); otherwise (0.9736842) you sell a Cheetah flask with another
+  prefix, priced by its own sale search (Cheetah, one non-Experimenter's prefix, not corrupted). The guide's own route keeps alt+aug spamming until both
+  mods are on the flask; by the same weights that is 0.000423 per alteration (about 2366
+  alterations plus 0.0094 Augmentations per alteration) and is not modelled here.
+  Minutes (estimate, not from the guide): about 72 alterations at 2-3 s each (3 min) plus
+  buying the base and listing the flask (3 min). Price quality and enchants separately; the
+  searches ignore them. Verify in game: the mod names/tiers on the flask, the item level, and
+  that the two sale searches show flasks you would really sell against.
