@@ -57,7 +57,8 @@ class Step:
 
 @dataclass(frozen=True)
 class Outcome:
-    """A result with its probability. Failure outcomes are valued at the craft's salvage."""
+    """A result with its probability. A failure outcome is worth `failure_value` (chaos per
+    occurrence, no undercut) when given, else the craft's salvage."""
 
     name: str
     probability: float
@@ -66,6 +67,7 @@ class Outcome:
     age_seconds: float | None = None
     listing_count: int | None = None
     is_failure: bool = False
+    failure_value: float | None = None
 
 
 @dataclass(frozen=True)

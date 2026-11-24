@@ -16,7 +16,7 @@ from urllib.parse import quote
 
 from poe_craft_mcp.clients.ninja import get_ninja, rates_from
 from poe_craft_mcp.clients.ninja_models import League, NinjaError, divine_chaos
-from poe_craft_mcp.clients.trade import RateLimited, TradeClient, TradeError, get_trade
+from poe_craft_mcp.clients.trade import NotCached, RateLimited, TradeClient, TradeError, get_trade
 from poe_craft_mcp.clients.trade_models import (
     STATUS_INSTANT_BUYOUT,
     parse_saved_url,
@@ -37,13 +37,22 @@ class PricingUnavailable(Exception):
     """No price could be produced and no cached listings exist to fall back on.
 
     `reason` is safe to show to the user (secret-masked, no stack trace). `retry_after` is
-    the seconds to wait when the trade site rate-limited us, else None.
+    the seconds to wait when the trade site rate-limited us, else None. `cause` is
+    "deadline" only when the caller's `deadline` (not the limiter's own wait cap or the
+    server) stopped the lookup.
     """
 
-    def __init__(self, reason: str, retry_after: float | None = None) -> None:
+    def __init__(
+        self, reason: str, retry_after: float | None = None, cause: str | None = None
+    ) -> None:
         self.reason = mask_secrets(reason)
         self.retry_after = retry_after
+        self.cause = cause
         super().__init__(self.reason)
+
+
+class QuoteNotCached(PricingUnavailable):
+    """A cache-only lookup had no cached listings; nothing was requested."""
 
 
 @dataclass(frozen=True)
@@ -101,12 +110,12 @@ def to_listings(raw: list[dict[str, Any]]) -> list[Listing]:
 
 
 async def wants_instant_buyout(
-    trade: TradeClient, target: str | dict[str, Any], deadline: float
+    trade: TradeClient, target: str | dict[str, Any], deadline: float, cache_only: bool = False
 ) -> bool:
     """True when a search query itself filters on instant buyout (`status: securable`), so
     pricing keeps that filter instead of widening it to every online listing."""
     if isinstance(target, str):
-        tq = await trade.resolve_saved_url(target, deadline=deadline)
+        tq = await trade.resolve_saved_url(target, deadline=deadline, cache_only=cache_only)
     else:
         tq = query_from_body(target, "search")
     status = tq.query.get("status")
@@ -124,12 +133,17 @@ async def price_outcome(
     query_json: dict[str, Any] | None = None,
     sample: int | None = None,
     league: str | None = None,
+    deadline: float | None = None,
+    cache_only: bool = False,
 ) -> OutcomePrice:
     """Price the item matched by a saved trade URL or a trade query JSON (exactly one).
 
     `sample` (default `config.trade_sample`, clamped to 1..100) is how many of the cheapest
     online listings are used (instant-buyout only when the query's status asks for it).
     `league` defaults to poe.ninja's current league; a trade URL's own league is ignored.
+    `deadline` (on the trade limiter's clock) caps the default 20 s wait so no trade request
+    starts after it; `cache_only` serves cached listings without any trade request and
+    raises `QuoteNotCached` when there are none.
     Raises `ValueError` for bad arguments and `PricingUnavailable` when rates or listings
     cannot be had (rate limited or failed with nothing cached).
     """
@@ -158,13 +172,24 @@ async def price_outcome(
 
     try:
         trade = get_trade(ctx)
-        deadline = trade.limiter.deadline()  # one wait budget for resolving and searching
-        instant = await wants_instant_buyout(trade, target, deadline)
+        own_limit = trade.limiter.deadline()  # one wait budget for resolving and searching
+        wait_until = own_limit if deadline is None else min(own_limit, deadline)
+        instant = await wants_instant_buyout(trade, target, wait_until, cache_only)
         found = await trade.listings_for(
-            resolved.id, target, n, instant_buyout=instant, deadline=deadline
+            resolved.id,
+            target,
+            n,
+            instant_buyout=instant,
+            deadline=wait_until,
+            cache_only=cache_only,
         )
+    except NotCached as exc:
+        raise QuoteNotCached(f"trade site: {exc}") from None
     except RateLimited as exc:
-        raise PricingUnavailable(str(exc), exc.retry_after) from None
+        ours = exc.cause == "deadline" and wait_until < own_limit
+        ours = ours and ctx.cache.clock() + exc.retry_after <= own_limit
+        cause = "deadline" if ours else None
+        raise PricingUnavailable(str(exc), exc.retry_after, cause) from None
     except TradeError as exc:
         raise PricingUnavailable(f"trade site: {exc}") from None
 

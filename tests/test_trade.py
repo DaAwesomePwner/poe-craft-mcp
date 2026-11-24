@@ -12,7 +12,7 @@ import httpx
 import pytest
 import respx
 
-from poe_craft_mcp.clients.trade import RateLimited, TradeClient, TradeError, get_trade
+from poe_craft_mcp.clients.trade import NotCached, RateLimited, TradeClient, TradeError, get_trade
 from poe_craft_mcp.clients.trade_models import decode_search_id, parse_saved_url
 from poe_craft_mcp.config import Config
 from poe_craft_mcp.context import AppContext
@@ -386,3 +386,22 @@ async def test_json_escaped_cookie_echo_is_rejected_before_caching(
     result = await trade.listings_for("Covens", SAVED_URL, sample=10)
     assert (result["from_cache"], result["search_id"]) == (False, "clean")
     await trade.aclose()
+
+
+@respx.mock
+async def test_cache_only_serves_any_cached_copy_and_never_requests(
+    trade: TradeClient, clock: FakeClock
+) -> None:
+    search, fetch = mock_search_and_fetch()
+    opaque = respx.get(f"{BASE}/api/trade/search/Covens/Ab12Cd")
+    with pytest.raises(NotCached):
+        await trade.listings_for("Covens", SAVED_URL, sample=10, cache_only=True)
+    with pytest.raises(NotCached):
+        await trade.resolve_saved_url(f"{BASE}/trade/search/Covens/Ab12Cd", cache_only=True)
+    assert (search.call_count, fetch.call_count, opaque.call_count) == (0, 0, 0)
+    await trade.listings_for("Covens", SAVED_URL, sample=10)
+    fresh = await trade.listings_for("Covens", SAVED_URL, sample=10, cache_only=True)
+    clock.advance(25 * 60)
+    old = await trade.listings_for("Covens", SAVED_URL, sample=10, cache_only=True)
+    assert (fresh["stale"], old["stale"], old["age_seconds"]) == (False, True, 1500)
+    assert (search.call_count, fetch.call_count) == (1, 1)

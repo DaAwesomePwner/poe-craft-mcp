@@ -1,0 +1,16 @@
+id: bow-flip
+name: Imperial Bow bench flip
+tags: [bench, base-flip]
+status: verified
+verified_patch: 3.30.0
+sources: ["https://example.com/guide"]
+base:
+  lookup: { source: ninja, type: BaseType, name: Imperial Bow, ilvl_min: 85 }
+steps:
+  - action: bench_craft
+    materials:
+      - { source: fixed, chaos: 0.3, label: Bench craft }
+outcomes:
+  - { name: crafted bow, probability: 1.0, trade_url: "https://www.pathofexile.com/trade/search/Settlers/H4sIAAAAAAAAAzXMMQqAMAxG4avIP3uCHkPdpEPECIU0LTYOUnp328H1e_AqipE9Ba4iZQtJ4ZBUgjLaDKXIHTY6HqFpoUKYYW8euIaYhaclHdxxbPplr38mPTtfQYzvEXzz7QP2CqqubgAAAA" }
+salvage: { fixed_chaos: 0 }
+minutes: 1

@@ -18,7 +18,12 @@ from poe_craft_mcp.clients.trade import TradeClient
 from poe_craft_mcp.context import AppContext
 from poe_craft_mcp.http.ratelimit import RateLimiter
 from poe_craft_mcp.log import register_secret
-from poe_craft_mcp.services.trade_pricing import PricingUnavailable, parse_indexed, price_outcome
+from poe_craft_mcp.services.trade_pricing import (
+    PricingUnavailable,
+    QuoteNotCached,
+    parse_indexed,
+    price_outcome,
+)
 
 if TYPE_CHECKING:
     from conftest import FakeClock
@@ -255,3 +260,32 @@ async def test_cold_opaque_saved_url_shares_one_wait_budget(
         await price_outcome(ctx, trade_url=f"{TRADE}/trade/search/Settlers/Ab12Cd")
     assert saved.call_count == 1 and search.call_count == 0
     assert clock() - start <= 20 and err.value.retry_after is not None
+
+
+async def test_cache_only_pricing_makes_no_trade_request(
+    ctx: AppContext, api: NinjaApi, trade: TradeClient, clock: FakeClock
+) -> None:
+    search, fetch = mock_trade(api)
+    with pytest.raises(QuoteNotCached):
+        await price_outcome(ctx, trade_url=SAVED_URL, sample=10, cache_only=True)
+    first = await price_outcome(ctx, trade_url=SAVED_URL, sample=10)
+    clock.advance(25 * 60)
+    cached = await price_outcome(ctx, trade_url=SAVED_URL, sample=10, cache_only=True)
+    assert (cached.p25, cached.stale, cached.age_seconds) == (first.p25, True, 1500)
+    assert (search.call_count, fetch.call_count) == (1, 1)
+
+
+async def test_caller_deadline_stops_requests_after_it(
+    ctx: AppContext, api: NinjaApi, trade: TradeClient, clock: FakeClock
+) -> None:
+    def slow_search(request: httpx.Request) -> httpx.Response:
+        clock.advance(10)
+        return recorded("search")
+
+    search = api.router.post(f"{TRADE}/api/trade/search/Covens").mock(side_effect=slow_search)
+    fetch = api.router.get(url__startswith=f"{TRADE}/api/trade/fetch/").mock(
+        return_value=recorded("fetch")
+    )
+    with pytest.raises(PricingUnavailable):
+        await price_outcome(ctx, trade_url=SAVED_URL, sample=10, deadline=clock() + 5)
+    assert (search.call_count, fetch.call_count) == (1, 0)

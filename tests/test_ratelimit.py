@@ -358,3 +358,14 @@ async def test_fetch_never_inherits_search_restriction(limiter: RateLimiter) -> 
     # A fetch restriction never gates exchange (search's sibling) either.
     assert limiter.wait_for("exchange") == pytest.approx(60.0)
     assert limiter.wait_for("fetch") == pytest.approx(120.0)
+
+
+async def test_rate_limited_cause_separates_server_from_deadline(
+    limiter: RateLimiter, clock: FakeClock
+) -> None:
+    with pytest.raises(RateLimited) as server:
+        await limiter.run("search", reply(429, {"Retry-After": "2"}))
+    with pytest.raises(RateLimited) as refused:
+        await limiter.run("search", reply(), deadline=clock() + 1)
+    assert (server.value.cause, refused.value.cause) == ("server", "deadline")
+    assert RateLimited(1.0, "x").cause == "server"
