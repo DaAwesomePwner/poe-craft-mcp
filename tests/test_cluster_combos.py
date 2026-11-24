@@ -276,6 +276,21 @@ def test_tally_groups_pairs_and_counts_drops() -> None:
     assert found.report()["pair_listings"] == 2
 
 
+def test_tally_bands_split_at_the_threshold() -> None:
+    """Both trade bounds include T; a listing at exactly T counts only at or above T."""
+    mods = {T_WP: WP, T_ES: ES}
+    rates = {"chaos": 1.0, "divine": DIV}
+    listings = [
+        {"amount": 1, "currency": "divine", "explicit_stats": [T_ES, T_WP]},  # exactly T
+        {"amount": 194.99, "currency": "chaos", "explicit_stats": [T_ES, T_WP]},
+    ]
+    below = tally(listings, rates, mods, total=2, below=DIV)
+    above = tally(listings, rates, mods, total=2, at_least=DIV)
+    assert below.pairs == {pair(ES, WP): [194.99]} and below.outside_band_listings == 1
+    assert above.pairs == {pair(ES, WP): [DIV]} and above.outside_band_listings == 1
+    assert below.report()["outside_band_listings"] == 1
+
+
 def test_classify() -> None:
     a, b, c, d = pair("a", "b"), pair("a", "c"), pair("b", "c"), pair("c", "d")
     e = pair("a", "d")
@@ -809,6 +824,27 @@ async def test_ambiguous_ids_join_the_exclusion(
         "filters": [{"id": i} for i in (T_LT, *EYE)],  # ES, FL and WP are the anchors
     }
     assert payload["notables"]["priceable"] == 4
+    # Brush has explicit ids (shared ones), so the unidentifiable-notable guard stays quiet.
+    assert "note" not in payload and payload["economics"] is not None
+    assert not any(
+        "cannot rule out" in w or "no explicit trade id" in w for w in payload["warnings"]
+    )
+
+
+async def test_listings_exactly_at_threshold_never_make_a_pair_not_sellable(
+    ctx: AppContext, fake: FakeTrade, data: GameData
+) -> None:
+    """Three LT+FL listings at exactly T come back in both searches (both bounds include T):
+    they count only at or above T, so LT+FL is a candidate, not not_sellable."""
+    scenario(fake)
+    at_t = [(1, "divine", (T_LT, T_FL))] * 3
+    fake.responses["below"] = fake.responses["below"][3:] + at_t  # no LT+FL below T now
+    fake.responses["above"] = fake.responses["above"] + at_t
+    payload, _ = await cluster_combos(ctx, data, request(max_pair_searches=0))
+    disc = payload["discovery"]
+    assert disc["below_threshold"]["outside_band_listings"] == 3
+    assert disc["at_or_above_threshold"]["outside_band_listings"] == 0
+    assert disc["classes"]["not_sellable"] == 0 and disc["classes"]["candidate"] == 4
 
 
 async def test_miss_with_listings_that_vanish_is_unknown(
@@ -859,6 +895,7 @@ async def test_unidentifiable_notable_blocks_confirmation(
     scenario(fake)
     payload, sources = await cluster_combos(ctx, blind, request())
     assert {fake.key(b) for b in fake.searches} == {"below", "above"}
+    assert len(fake.searches) == 2  # discovery only: no pair, miss or base search
     assert payload["sellable_pairs"] == [] and payload["economics"] is None
     assert payload["note"].startswith("cannot rule out jewels carrying Brush with Death")
     assert "refresh the game data export" in payload["note"]
