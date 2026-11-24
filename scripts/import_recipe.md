@@ -64,9 +64,11 @@ The YAML must validate against `src/poe_craft_mcp/recipes/recipe.schema.json`:
   (`p_source: user`).
   The placeholder makes evaluation fail loudly until the user replaces it with a real mod id,
   a guide number or their own number. To find the mod id from in-game affix text, look in
-  `data/gamedata/mods.json` (run `uv run python scripts/fetch_gamedata.py` first): keys are
+  `mods.json` in the game-data folder (`<data_dir>/gamedata`, `data/gamedata` by default;
+  `uv run python scripts/fetch_gamedata.py` prints where it wrote it): keys are
   mod ids and each has `text`, `generation_type` (prefix/suffix) and `groups`. For example,
-  `uv run python -c "import json; m=json.load(open('data/gamedata/mods.json')); print([k for k,v in m.items() if 'maximum Life' in v.get('text','')])"`
+  `uv run python -c "import json; from poe_craft_mcp.config import load_config; p=load_config().data_dir/'gamedata'/'mods.json'; m=json.load(open(p, encoding='utf-8')); print([k for k,v in m.items() if 'maximum Life' in v.get('text','')])"`
+  (it reads your configured `data_dir`, so it works wherever the export was fetched)
   lists `IncreasedLife...` ids, one per tier. Pick the tier(s) the guide wants, then confirm
   with the `mod_odds` tool, which takes those ids.
 - `outcomes`: every possible end state of ONE full attempt, failure included. Each has `name`,
