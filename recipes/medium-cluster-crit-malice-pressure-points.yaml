@@ -9,9 +9,9 @@ sources:
 requires: []
 budget_div: 0.1
 base:
-  # Cheapest online white (normal), not corrupted Medium Cluster Jewel with "15% increased
-  # Critical Strike Chance", "Adds 4 Passive Skills", item level 68-83.
-  trade_url: "https://www.pathofexile.com/trade/search/Covens/H4sIAAAAAAACCnWQ3UrEMBBGX2XJdRFruyXZW-8En0CWJaazODBNan5WS8m7O6mrRFivksx850yYVbwn8Is4rCJEHVMoNzdHdFYchLOEFkRuRFxm4MIzjJim3SOlEMHvnuADSDQbyuTL-pPTduTyGYlT3w0cuQzWvGkb70r-1KleKtW1UnH0oilBPftB8dQRg34lYPSsKUBubnru5dDuh7bf154JWdI3YtKffN5wHfOx-mEBgjlV7-qKdKFf5yCvUtmx1Tjv0xyLttrbNkHkfF3cP1qvPcblD2idnzQVsrDB-Vjas0ezbTUYbn0BiSrwC7MBAAA"
+  # Cheapest instant-buyout white (normal), not corrupted Medium Cluster Jewel with "15%
+  # increased Critical Strike Chance", "Adds 4 Passive Skills", item level 68-83.
+  trade_url: "https://www.pathofexile.com/trade/search/Covens/H4sIAAAAAAACCnWQ0U7DMAxFf2Xyc4Uo7apkr7wh8QVomkLqiUhpUpxkUFX5d5wyUJDGU5zre48tr_CekBY4rBCiiimUys_ReAcHCKgTqVeLkBuIy4ysPeNo0rR7tClEpN0TfqCFZktz-GX98Sk3snw2ll3fDTOyjE6_KRfviv_UyV5I2bVCsvWibMJ6_IPkqaMJZQGOnpUNmJubnHsxtPuh7fc1ZzIM6RuY1Ce_N1jHfKw2LIGgT9W_Ko292F_mIK5Q0TFVe6I0x4KtTrdNgJyvh_sHS4pMXP4EnadJ2ZIs2eAplvZMRm9XDZpbX0DuN_q2AQAA"
 steps:
   - action: transmute
     materials:
@@ -37,12 +37,12 @@ steps:
 outcomes:
   - name: "Overwhelming Malice + Pressure Points"
     probability: 0.0116569
-    # Medium, Crit Chance enchant, 4 passives, not corrupted, both notables.
-    trade_url: "https://www.pathofexile.com/trade/search/Covens/H4sIAAAAAAACCoWS22rDMAyGX6X4OoykTtq4t70b7AlGKJ6jMoFjZz5sDSHvPjnrwIWuu7Is_d8v-TCzjwhuYoeZ-SBD9CmyY0Br2IFZo9EAWwoWphEo8QI9xmFz1NEHcJtn-ALNihUl8nX-1UnTU_qMmlQ_BewpDUa9SxOekv7ERd0KwatWkPRT6gh5762grj16-aaB0LPUHpbirk_Z7qpmV9VN7jMgmdQFG-SF1jteXXL7Z9zLqFHhtc9-X9ZlW5U8a_NoxhuYc1GJbdO09WO6W7pskHQMr07ZPguVdS6OIbHZk602bFmub_YH66TDMN2AxppokH5DghPurQtJMTpU6yV5RaVvJw1tFzECAAA"
-  - name: "one of Overwhelming Malice / Pressure Points (missed Regal)"
+    # Rare Medium, Crit Chance enchant, 4 passives, ilvl 68-83, not corrupted, both notables.
+    trade_url: "https://www.pathofexile.com/trade/search/Covens/H4sIAAAAAAACCoVRS26DMBC9SuQ1qiAGYmebXaWeoEKRaybqSA5Qf9IgxN07prRypDRdefxm3mfsiX0EsCPbT8x55YOLVT947Du2Zw50sOrNAJsz5scBCHuBFsN5czDBebCbZ_gEw7KFTeTX6WdOdS3BJzQ09d3AlmDo9Lvq_FOcP3JZCil5ISSNXpQJkNpvJbm26GIAop6UcTBnd3VyURdVXZRVqnNGEikzdlZXOu9oNVHtn7jXwaDG1We3y8tcFDlPbB5lvCFzLgu5rSpRPmY3c5MEiWs4fUzuSYnmYn43rcW6quCkqntrw-CjbPKhiwOb5_U7_5C1yqIfb4gELbzIdL31sTlY1MvTOU2tLwU0I5dKAgAA"
+  - name: "Overwhelming Malice or Pressure Points without its target partner (missed Regal)"
     probability: 0.9883431
-    # Same jewel with exactly one of the two notables; magic or rare.
-    trade_url: "https://www.pathofexile.com/trade/search/Covens/H4sIAAAAAAACCn2STW7DIBCFrxKxtioT24nJNrtKPUFlRRQTdSQMLj9tLIu7d3BdiahuVsDwvjcPDTP5CNJO5DQT57kPLu3M6MFociJGK9CSxIL4aZRYeJE9hGF3VsF5aXfP8ksqUiwokq_zr47rHstXUKj6uYAey1KLd679U9JfKla3jFW0ZSj95CrIvPeeYdceHH9TEtErV07GYtOnbA-0OdC6yX0GQJO6IAO_4brh1SW3Na4wQfs_NF1pGreechsVCFgzHI9lXba0rDKTR_nv4KpilO2bpq0f013ssiAppBOX7JxthbE2jD6x2TgXGxLjOs9_WMst-OkO1EYHDfhTEpxwZ6xPitGCWObtBF59A0h8sj9NAgAA"
+    # Rare, same enchant, passives and ilvl range, not corrupted: exactly one of the two.
+    trade_url: "https://www.pathofexile.com/trade/search/Covens/H4sIAAAAAAACCn2STW7DIBCFrxKxtioTbAeyza5ST1BZEcVERcLY5SeNZXH3Dq5bEdXNimFmvjdvBDP6CNJO6Dgj57kPLkXD6NVg0BE5KYLlb1qiWCA_jRJyL7JTod-ddHBe2t2z_JQaFQsN8Ov808dNB-mL0tD1XVAdpKUR79z4p9R_JqyijBFMGbReuQ4yH79nMLVTLhkA9MK1k7HY1Clpg-sGV3Wu0ysQqQrU8xucG1ptUlvtiiEY_4fGK43j1iq3USuhVg-HQ1mVFJckE3nk_w4mhGG2r2taPabb2GZGkkknztk9C5W-6t89GrouQgmoisHaMPokmz32MgHFuD71P7KWW-WnOxBSC5dIN1ifiqNVYvkFTkDpC3l1IfJmAgAA"
 salvage:
   # Not used: both end states are sold through the searches above.
   fixed_chaos: 0
@@ -53,25 +53,29 @@ notes: >-
   increased Critical Strike Chance" and "Adds 4 Passive Skills", carrying both Overwhelming
   Malice and Pressure Points. Buy a white (normal) jewel with that enchant, 4 passives and item
   level 68-83 (Overwhelming Malice needs item level 68; at 84+ extra small-passive mods join the
-  pool and both notables get rarer; the guide buys 75-83). Check it is not corrupted.
-  Steps. (1) Use one Orb of Transmutation to make the white jewel magic. (2) Alteration and
-  Augmentation cycle: use an Orb of Alteration; if the jewel has only a suffix (a small-passive
-  line such as "+2 to All Attributes"), use an Orb of Augmentation to add a prefix; if it has
-  only a prefix that is neither notable, alterate again. Stop as soon as Overwhelming Malice or
-  Pressure Points appears; if it appears alone, do not augment. (3) Use one Regal Orb. If it
-  adds the other notable, sell the pair. Otherwise sell the rare one-notable jewel as it is.
-  How the odds are derived (export weights at ilvl 75; ilvl 68-83 have the same pool): all mods
-  weigh 22326, prefixes 11726, suffixes 10600; Overwhelming Malice 171, Pressure Points 457. Per
-  cycle one of them appears with chance 0.05356 (mod_odds alt_aug: about 18.7 Alterations and
-  4.43 Augmentations per hit); it is Pressure Points 72.8% of the time and Overwhelming Malice
-  27.2%. The jewel has no suffix 26.3% of the time. The Regal then adds the missing notable with
-  chance 0.00782 (Pressure Points there, Overwhelming Malice wanted; 0.00815 averaged over the
-  suffix it may carry) or 0.0206 (Overwhelming Malice there, Pressure Points wanted; 0.0215 with
-  a suffix), all mod_odds regal. Together 0.0116569 per attempt (the pair outcome, about 1 in
-  86); the other 0.9883431 is a jewel with one of the two, priced by its own search (it takes
-  the cheaper of the two, so it is conservative). The pair is rare: most of the value is the
-  one-notable sale. Not modelled: the guide scours a miss and starts again (here a miss is
-  sold) and uses an Exalted Orb when the Regal added a suffix and a prefix slot is still open.
-  Minutes (estimate, not from the guide): about 19 Alterations at 3 s each (1 min), the Regal,
-  plus buying the base and listing (3 min). Verify in game: notable names and item levels, the
-  enchant and passive count on the searches, and that the sale searches show jewels like yours.
+  pool and both notables get rarer; the guide buys 75-83). Check it is not corrupted. Steps. (1)
+  Use one Orb of Transmutation to make the white jewel magic. (2) Alteration and Augmentation
+  cycle: use an Orb of Alteration; if the jewel has only a suffix (a small-passive line such as
+  "+2 to All Attributes"), use an Orb of Augmentation to add a prefix; if it has only a prefix
+  that is neither notable, alterate again. Stop as soon as Overwhelming Malice or Pressure
+  Points appears; if it appears alone, do not augment. (3) Use one Regal Orb. If it adds the
+  other notable, sell the pair. Otherwise sell the rare jewel (the anchor without its target
+  partner) as it is. How the odds are derived (export weights at ilvl 75; ilvl 68-83 have the
+  same pool): all mods weigh 22326, prefixes 11726, suffixes 10600; Overwhelming Malice 171,
+  Pressure Points 457. Per cycle one of them appears with chance 0.05356 (mod_odds alt_aug:
+  about 18.7 Alterations and 4.43 Augmentations per hit); it is Pressure Points 72.8% of the
+  time and Overwhelming Malice 27.2%. The jewel has no suffix 26.3% of the time. The Regal then
+  adds the missing notable with chance 0.00782 (Pressure Points there, Overwhelming Malice
+  wanted; 0.00815 averaged over the suffix it may carry) or 0.0206 (Overwhelming Malice there,
+  Pressure Points wanted; 0.0215 with a suffix), all mod_odds regal. Together 0.0116569 per
+  attempt (the pair outcome, about 1 in 86); the other 0.9883431 is a rare jewel with one of the
+  two and not the other, priced by its own search (it takes the cheaper of the two, so it is
+  conservative). Pricing: every search here (base and both sales) asks for instant-buyout
+  listings only (trade status "securable"); both sale searches take rare jewels with the same
+  enchant, passive count and item-level range as the base, not corrupted. The pair is rare: most
+  of the value is the one-notable sale. Not modelled: the guide scours a miss and starts again
+  (here a miss is sold) and uses an Exalted Orb when the Regal added a suffix and a prefix slot
+  is still open. Minutes (estimate, not from the guide): about 19 Alterations at 3 s each (1
+  min), the Regal, plus buying the base and listing (3 min). Verify in game: notable names and
+  item levels, the enchant and passive count on the searches, and that the sale searches show
+  jewels like yours.

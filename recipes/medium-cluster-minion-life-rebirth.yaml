@@ -9,9 +9,9 @@ sources:
 requires: []
 budget_div: 0.1
 base:
-  # Cheapest online white (normal), not corrupted Medium Cluster Jewel with "Minions have 12%
-  # increased maximum Life", "Adds 4 Passive Skills", item level 68-83.
-  trade_url: "https://www.pathofexile.com/trade/search/Covens/H4sIAAAAAAACCnWQ3WrDMAxGX6XoOoyGpMHp7e4Ge4JRiueoTKDYmX-6hZB3n5x1w4Puyrb0nSOjBd4T-hmOC4SoYwr55qZIzsIRnGWyCGsFcZ5QCs84UBp3j5xCRL97wg9kqDZUyJflJ6ftIOULsaS-GzRIGa150zY-5Py56VvV902teoleNScsZzd7mTpQ0K-Mgl40B1yru5696upDV7eH0jOSSNoKRv0p5x3XaT0VP8xAMOfiXVyJr_zr7NRNqhqxGud9mmLWFnvbJsC63hb3j9ZrT3H-A1rnR82ZzGxwPub25MlsWw1GWl8FyXdyswEAAA"
+  # Cheapest instant-buyout white (normal), not corrupted Medium Cluster Jewel with "Minions
+  # have 12% increased maximum Life", "Adds 4 Passive Skills", item level 68-83.
+  trade_url: "https://www.pathofexile.com/trade/search/Covens/H4sIAAAAAAACCnWQ0WrDMAxFf6XoOYyGpMHp694G-4JSiuuozODYmWy3C8H_Xjnrhgfdk-Wre4-EFviMSDPsF_BBhuhz5aagnYU9eFSR5NkgpArCPCFr7zjoOG5eTfQBafOGNzRQrWkOH5Yfn7QDyxdt2PXd0APLaNWHtOEl-09N34q-b2rRs_UqTcRyfLPlqYP2eQGOXqTxmKqnnK3o6l1Xt7uSM2qGtBWM8ovfJ6xjOhYb5oBXp-JflNpczS-zEw-oaJiqHFGcQsYWp1snQEqPw_2DJUk6zH-C1tEoTU7mrHcUcnsirdaresWtO8wNsIO2AQAA"
 steps:
   - action: transmute
     materials:
@@ -37,12 +37,12 @@ steps:
 outcomes:
   - name: "Life from Death + Blessed Rebirth"
     probability: 0.0183218
-    # Medium, Minion Life enchant, 4 passives, not corrupted, both notables.
-    trade_url: "https://www.pathofexile.com/trade/search/Covens/H4sIAAAAAAACCoWSy2rDMBBFfyVobYptyZGdbXaFfkExQZUVOiBLrh5tjPG_d-SmoECarjSauefO6LGQj6jcTA4L8UGE6FNkpwDWkAOxRoNRZC1ImCeFiRc1QBx3Rx19UG73rL6UJsWGIvm6_OqEGTB9Bo2qnwIMmFZGvgsTnpL-RDvWdh2t2g6ln0JHlfemJXYdwIs3rRA9C-3VWtz1Kdt91ewr1uQ-I6AJK8goLrje8eqT2z_jXiYNEq59akp5zWnJedbn0ZA3dMVqxjvWcPaY7tc-mySdw8tTts9CaZ2LU0hs9mabDVnX66P9wTrhIMw3oLEmGsDvkOCEe-tCUkwO5HZLXmLpG2JSkp0yAgAA"
-  - name: "one of Life from Death / Blessed Rebirth (missed Regal)"
+    # Rare Medium, Minion Life enchant, 4 passives, ilvl 68-83, not corrupted, both notables.
+    trade_url: "https://www.pathofexile.com/trade/search/Covens/H4sIAAAAAAACCoVRyW6DMBD9lchnFAE2GHLNrVK_oEKRayaqJbPUSxKE-PeOKa0cKU1PHr-Zt4w9k08PZiKHmVgnnLehGkanhp4ciAXpjXjXQJaEuGkExF6hVb7bHbW3DszuBa6gSbKykfw2_8yJvkX4rDROfTdUizD08kP0bh_mT7RmVV3TrKpx9CK0h9iepujaKhsCIPUstIUleaiTVmVWlBkrYp1OoQhLSCdueD7QaoLaP3Fvo1ZSbT45pTznNOU88nkW8o6dsZzxmhWcPWc3SxMlCXtYeYruUan0Rf-uWlbbrhVFVTkY40cXZKMfXR3Ismz_-YesEUa56Y6I0MoLTDsYF5qjUXJ9Oyux9QXosGIgSwIAAA"
+  - name: "Life from Death or Blessed Rebirth without its target partner (missed Regal)"
     probability: 0.9816782
-    # Same jewel with exactly one of the two notables; magic or rare.
-    trade_url: "https://www.pathofexile.com/trade/search/Covens/H4sIAAAAAAACCn2S3WrEIBCFX2XxOpQYzSbZ270r9AlKWKxxqWA09afdEHz3jmkKLk33Sp0535kZxgV9BGFndFqQ88wHl25m8tJodEJGK6kFigXy8yQg8CIGGcbDWQXnhT08iy-hULGiQL4uvzqmBwhfpQLVT0IOEBaavzPtn5L-Qjradh3BbQfST6aCyGuTEqoO0rE3JQC9MuVELHZ9yvaI6yOmde4zSjChBRrZDc4drz65be1yE7T_Q-ONxnFvlNukJJdbDxUhTdWQsmkyl0cD3NGYVrTpaN3Qx3Qf-6yT1KXjl-ydXbmxNkw-sdk-VxsU47bQf1jLrPTzHaiNDlrCV0lwwp2xPikmK_m6cMch9Q21LCrxTgIAAA"
+    # Rare, same enchant, passives and ilvl range, not corrupted: exactly one of the two.
+    trade_url: "https://www.pathofexile.com/trade/search/Covens/H4sIAAAAAAACCn2Sy27DIBBFfyVibVXGYGNnm12lfkFlRRQTFQk_yiONZfHvHVy3IqqbFcPMnDt3BAv68NLM6Lgg67jzNkbj5NQ4oCOyUnjD37REIUNuniTkXmSnfH84aW-dNIdn-Sk1ylYa4Nflp48PHaQvSkPXd0F1kJaDeOeDe4r9Z9LQumkIrhtovXLtZTqe5DC1UzYaAPTCtZUh29XJ6wqXFaZlqtMrEKEZ6vkNzh2tNqptdsXoB_eHxhuNw94qt0kroTYPBSGsYCRnLFF5tMAdjWlBWUNLRh_TbWgTJ9GlFefknoRKX_XvIlW9bVITUBWjMX5yUTZ57XUCCmF7639kDTfKzXcgpFYuknY0LhYno8T6DayA0helksuHZwIAAA"
 salvage:
   # Not used: both end states are sold through the searches above.
   fixed_chaos: 0
@@ -53,24 +53,27 @@ notes: >-
   have 12% increased maximum Life" and "Adds 4 Passive Skills", carrying both Life from Death
   and Blessed Rebirth. Buy a white (normal) jewel with that enchant, 4 passives and item level
   68-83 (Blessed Rebirth needs item level 68; at 84+ extra small-passive mods join the pool and
-  both notables get rarer; the guide buys 75-83). Check it is not corrupted.
-  Steps. (1) Use one Orb of Transmutation to make the white jewel magic. (2) Alteration and
-  Augmentation cycle: use an Orb of Alteration; if the jewel has only a suffix (a small-passive
-  line such as "+3% to Chaos Resistance"), use an Orb of Augmentation to add a prefix; if it has
-  only a prefix that is neither notable, alterate again. Stop as soon as Life from Death or
-  Blessed Rebirth appears; if it appears alone, do not augment. (3) Use one Regal Orb. If it
-  adds the other notable, sell the pair. Otherwise sell the rare one-notable jewel as it is.
-  How the odds are derived (export weights at ilvl 75; ilvl 68-83 have the same pool): all mods
-  weigh 22499, prefixes 11899, suffixes 10600; Life from Death 716, Blessed Rebirth 269. Per
-  cycle one of them appears with chance 0.08278 (mod_odds alt_aug: about 12.1 Alterations and
-  2.85 Augmentations per hit); it is Life from Death 72.7% of the time, Blessed Rebirth 27.3%.
-  The jewel has no suffix 26.4% of the time. The Regal then adds the missing notable with chance
-  0.01235 (Life from Death there, Blessed Rebirth wanted; 0.01287 averaged over the suffix it
-  may carry) or 0.0322 (Blessed Rebirth there; 0.0335 with a suffix), all mod_odds regal.
-  Together 0.0183218 per attempt (the pair outcome, about 1 in 55); the other 0.9816782 is a
-  jewel with one of the two, priced by its own search (it takes the cheaper of the two, so it is
-  conservative). Most of the value is the one-notable sale. Not modelled: the guide scours a
-  miss and starts again (here a miss is sold) and uses an Exalted Orb when the Regal added a
+  both notables get rarer; the guide buys 75-83). Check it is not corrupted. Steps. (1) Use one
+  Orb of Transmutation to make the white jewel magic. (2) Alteration and Augmentation cycle: use
+  an Orb of Alteration; if the jewel has only a suffix (a small-passive line such as "+3% to
+  Chaos Resistance"), use an Orb of Augmentation to add a prefix; if it has only a prefix that
+  is neither notable, alterate again. Stop as soon as Life from Death or Blessed Rebirth
+  appears; if it appears alone, do not augment. (3) Use one Regal Orb. If it adds the other
+  notable, sell the pair. Otherwise sell the rare jewel (the anchor without its target partner)
+  as it is. How the odds are derived (export weights at ilvl 75; ilvl 68-83 have the same pool):
+  all mods weigh 22499, prefixes 11899, suffixes 10600; Life from Death 716, Blessed Rebirth
+  269. Per cycle one of them appears with chance 0.08278 (mod_odds alt_aug: about 12.1
+  Alterations and 2.85 Augmentations per hit); it is Life from Death 72.7% of the time, Blessed
+  Rebirth 27.3%. The jewel has no suffix 26.4% of the time. The Regal then adds the missing
+  notable with chance 0.01235 (Life from Death there, Blessed Rebirth wanted; 0.01287 averaged
+  over the suffix it may carry) or 0.0322 (Blessed Rebirth there; 0.0335 with a suffix), all
+  mod_odds regal. Together 0.0183218 per attempt (the pair outcome, about 1 in 55); the other
+  0.9816782 is a rare jewel with one of the two and not the other, priced by its own search (it
+  takes the cheaper of the two, so it is conservative). Pricing: every search here (base and
+  both sales) asks for instant-buyout listings only (trade status "securable"); both sale
+  searches take rare jewels with the same enchant, passive count and item-level range as the
+  base, not corrupted. Most of the value is the one-notable sale. Not modelled: the guide scours
+  a miss and starts again (here a miss is sold) and uses an Exalted Orb when the Regal added a
   suffix and a prefix slot is still open. Minutes (estimate, not from the guide): about 12
   Alterations at 3 s each (under 1 min), the Regal, plus buying the base and listing (3 min).
   Verify in game: notable names and item levels, the enchant and passive count on the searches,

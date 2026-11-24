@@ -85,9 +85,11 @@ sale price to rank on. Rerun `evaluate_recipe` later in the league; the searches
 
 Four cluster jewel crafts, all with the same shape: buy a white jewel with the right enchant and
 passive count, make it magic, alt-aug until an anchor notable appears, then use **one** Regal
-Orb. A Regal that adds a partner notable gives the pair; a miss leaves a rare one-notable jewel,
-which is sold too. Both end states are sale outcomes with their own trade search; `salvage` is
-unused.
+Orb. A Regal that adds a partner notable gives the pair; a miss leaves a rare jewel with the
+anchor but without a target partner (the Regal's mod can be anything else, even another
+notable), which is sold too. Both end states are sale outcomes with their own trade search;
+`salvage` is unused. Every search (base, pair, miss) asks for **instant-buyout** listings only
+(trade status `securable`), never whisper listings.
 
 | Recipe id | What you make | Guide (patch) |
 | --- | --- | --- |
@@ -112,8 +114,13 @@ suffixes 10600 → 14150), which makes every notable rarer. The pool is identica
 for the Medium jewels and from 75 to 83 for the Large one, so the base searches take item level
 68-83 (Medium) or 75-83 (Large, as the guide does) and the odds use ilvl 75.
 `evaluate_recipe` warns that the base's real item level is unknown; within those ranges it does
-not change the odds. Bases are white, not corrupted, with the exact enchant and passive count;
-the sale searches use the same enchant and passive count, magic or rare, not corrupted.
+not change the odds. Bases are white, not corrupted, with the exact enchant and passive count.
+Both sale searches take **rare** jewels with the same enchant, passive count and item-level range
+as the base, not corrupted, so magic crafting bases (for example ilvl 84 magic jewels with the
+anchor) never price the miss. The pair searches require the anchor and a partner (an `and`
+group, plus a `count` group of at least one partner where there are several); the miss searches
+require the anchor and exclude every target partner (a `not` group, or for Crit and Minion a
+`count` group of exactly one of the two notables).
 
 ### How the odds were derived
 
@@ -141,12 +148,16 @@ Everything comes from the RePoE 3.30.0.4.3 export through `mod_odds`; nothing is
 | Minion Life, LfD or BR | 0.08278 | 12.1 / 2.85 | 26.4% | LfD held (72.7%): 0.01235 / 0.01287; BR held (27.3%): 0.0322 / 0.0335 | 0.0183218 (1 in 55) |
 | Large Spell, Mage Hunter | 0.02777 | 36.0 / 9.91 | 22.5% | 0.0464 / 0.0486 | 0.0481352 (1 in 21) |
 
-The Regal hits rarely, so **most of each recipe's value is the one-notable sale**; the pair is
-upside. The one-notable searches take the cheapest comparable jewel (for Crit and Minion, the
+The Regal hits rarely, so **most of each recipe's value is the miss sale**; the pair is
+upside. The miss searches take the cheapest comparable rare jewel (for Crit and Minion, the
 cheaper of the two notables; for Large, a Mage Hunter jewel without either partner, although a
 Mage Hunter + suffix notable is worth more), so the miss values are conservative.
 
 ### Live snapshot
+
+**Pre-instant-buyout, superseded:** taken with online (whisper) listings and the earlier
+magic-or-rare, any-item-level miss searches; it will be refreshed once pricing uses instant-buyout
+listings only.
 
 `evaluate_recipe` for each recipe and `rank_crafts(budget_div=30, include_unverified=true,
 tags=["cluster"])`, run 2026-11-24 04:09-04:11 UTC, league Covens, 1 divine = 197.7 chaos,
@@ -169,8 +180,8 @@ listings (the pair is valued at 0, so V and profit above count only the one-nota
 searches themselves work: the Crit pair search, run once with offline sellers included, found
 30 listings, so the market was simply thin at 04:10 UTC with online-only status. Every
 one-notable search also had fewer than 10 online listings (the Large one on 2), so none of the
-profits above is meaningful yet. poe.ninja's ClusterJewel overview at the same time priced these white bases
-higher than the cheapest trade listings (for example 15 c for 5-passive Chaos DoT and 10 c for
+profits above is meaningful yet. poe.ninja's ClusterJewel overview at the same time priced these
+white bases higher than the cheapest trade listings (for example 15 c for 5-passive Chaos DoT and 10 c for
 4-passive Crit, ilvl 75-83, and 6.6 c for 8-passive Spell Damage), so the 1-3 c trade bases may be
 too good to last. Rerun `evaluate_recipe` at a busier hour; the searches are live.
 
