@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable
 from typing import TYPE_CHECKING, Any
 
 from poe_craft_mcp.clients.ninja_models import Dataset
@@ -17,46 +17,35 @@ SURVEY_ASSUMPTIONS = (
     SALE_FILTER_ASSUMPTION,
     "Threshold T = min_value_div x poe.ninja chaos per Divine",
     "PROVISIONAL: every value here comes from the two discovery searches only (rares with two "
-    "or more of the enchant's priceable notables, priced below T and at or above T); no exact "
+    "or more of the enchant's priceable notables; band A counts listings priced strictly "
+    "below T, band B those at T or more, at poe.ninja rates); no exact "
     "pair search confirms it. Run cluster_combos on an enchant to confirm its pairs and price "
     "the craft",
     "Candidate: a pair with fewer than min_listings discovery listings below T and at least "
-    "one at or above T. Provisional value: its min_listings-th cheapest listing at or above T "
-    "(its cheapest one there when it has fewer), less undercut_pct; provisionally sellable "
-    "when that value is at least T",
+    "one at or above T. Provisional value: the min_listings-th cheapest listing at or above T, "
+    "or the cheapest one when fewer are listed, less undercut (undercut_pct); provisionally "
+    "sellable when that value is at least T",
     "p_any_provisional: exact chance per attempt (Alteration/Augmentation until an anchor "
     "notable shows, then one Regal) that the rare holds a provisionally sellable pair; the "
     "hit value per attempt has no miss value and no costs",
     "Discovery listings with a third notable the base can roll at any item level are never "
     "counted as a pair listing; enchants with a notable that has no explicit trade id are "
     "skipped",
-    "Enchants whose two discovery searches are cached and fresh are surveyed first with no "
-    "request; a discovery result served from a stale cache (the trade site refused a new "
-    "search) is never used: that enchant stays pending",
+    "Enchants whose two discovery searches are cached and fresh are surveyed first, straight "
+    "from the cache with no request; live searches follow one band at a time. A band served "
+    "from a stale cache (the trade site refused a new search) is never used: the survey stops "
+    "there, that enchant stays pending and the retry hint is kept",
 )
 
 
-def rank(rows: list[dict[str, Any]], order: Sequence[str]) -> list[dict[str, Any]]:
-    """p_any_provisional, then provisional sellable pairs (both descending), then the
-    enchant's file order."""
-    position = {enchant_id: i for i, enchant_id in enumerate(order)}
-    return sorted(
-        rows,
-        key=lambda r: (
-            -(r["p_any_provisional"] or 0.0),
-            -r["provisional_sellable_pairs"],
-            position[r["enchant_id"]],
-        ),
+def rank(scored: Iterable[tuple[float, dict[str, Any]]]) -> list[dict[str, Any]]:
+    """Rows by the unrounded p_any_provisional, then provisional sellable pairs (both
+    descending), then enchant id; the row's own p_any_provisional is rounded for display."""
+    ordered = sorted(
+        scored,
+        key=lambda s: (-s[0], -s[1]["provisional_sellable_pairs"], s[1]["enchant_id"]),
     )
-
-
-def stop_reason(retry_after: float, now: float, deadline: float) -> str:
-    if now + retry_after > deadline:
-        return (
-            "max_seconds time budget spent (the next trade search would wait about "
-            f"{retry_after:.0f}s)"
-        )
-    return f"trade site rate limited; retry in about {retry_after:.0f}s"
+    return [row for _, row in ordered]
 
 
 def continue_note(cache_minutes: int) -> str:

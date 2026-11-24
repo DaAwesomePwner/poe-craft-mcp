@@ -35,7 +35,7 @@ from test_ninja import NinjaApi, api, ctx
 from test_tools_prices import call, session
 from test_trade_pricing import trade
 
-from poe_craft_mcp.clients.trade import TradeClient
+from poe_craft_mcp.clients.trade import TradeClient, get_trade
 from poe_craft_mcp.context import AppContext
 from poe_craft_mcp.gamedata.combos import combo_odds
 from poe_craft_mcp.gamedata.loader import load_gamedata
@@ -148,23 +148,33 @@ async def test_passives_must_fit_the_base(ctx: AppContext, data: GameData) -> No
 
 def test_provisional_value_rule() -> None:
     assert provisional_value([100, 200, 300, 400], 3, 0.05) == pytest.approx(285.0)
-    assert provisional_value([100, 200], 3, 0.05) == pytest.approx(95.0)  # fewer: cheapest
+    # Fewer than min_listings listed: a seller must undercut the cheapest competing listing.
+    assert provisional_value([100, 200], 3, 0.05) == pytest.approx(95.0)
     assert provisional_value([250], 1, 0.0) == 250
 
 
-def test_rank_order() -> None:
-    def row(enchant_id: str, p: float | None, n: int) -> dict[str, Any]:
-        return {"enchant_id": enchant_id, "p_any_provisional": p, "provisional_sellable_pairs": n}
+def scored(enchant_id: str, p: float, n: int) -> tuple[float, dict[str, Any]]:
+    row = {"enchant_id": enchant_id, "p_any_provisional": round(p, 6)}
+    return p, {**row, "provisional_sellable_pairs": n}
 
+
+def test_rank_order() -> None:
+    """p descending, then sellable pairs descending, then enchant id."""
     rows = [
-        row("a", 0.1, 1),
-        row("b", 0.2, 1),
-        row("c", 0.1, 3),
-        row("d", 0.0, 0),
-        row("e", 0.1, 3),
+        scored("a", 0.1, 1),
+        scored("b", 0.2, 1),
+        scored("e", 0.1, 3),
+        scored("d", 0.0, 0),
+        scored("c", 0.1, 3),
     ]
-    ranked = rank(rows, ["e", "d", "c", "b", "a"])
-    assert [r["enchant_id"] for r in ranked] == ["b", "e", "c", "a", "d"]
+    assert [r["enchant_id"] for r in rank(rows)] == ["b", "c", "e", "a", "d"]
+
+
+def test_rank_uses_unrounded_chances() -> None:
+    """0.10000004 and 0.10000003 display alike but must not fall back to the pair count."""
+    rows = [scored("a", 0.10000003, 5), scored("b", 0.10000004, 1)]
+    assert rows[0][1]["p_any_provisional"] == rows[1][1]["p_any_provisional"]
+    assert [r["enchant_id"] for r in rank(rows)] == ["b", "a"]
 
 
 # --- the survey -------------------------------------------------------------------------------
@@ -304,10 +314,58 @@ async def test_stale_discovery_is_never_used(
     payload, _ = await cluster_combo_survey(ctx, data, request())
     assert payload["ranking"] == []
     assert payload["stopped"].startswith("the trade site served only a stale cached copy")
+    assert payload["retry_after_seconds"] >= 60  # the 429's pause, from the limiter
     assert [p["enchant"] for p in payload["pending"]] == [
         "Chaos Damage over Time",
         "Critical Chance",
     ]
+    # The stale band A stops at once: band B and the next enchant are not searched again.
+    assert fake.searched((CDOT, "below")) == 2 and fake.searched((CDOT, "above")) == 1
+    assert fake.searched((CRIT, "below")) == 1
+
+
+async def test_cache_phase_never_makes_a_request(
+    ctx: AppContext,
+    fake: EnchantTrade,
+    data: GameData,
+    clock: FakeClock,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Each cache read ages the cache by 11 minutes, so both bands expire right after the
+    cache phase read them: a second lookup would search live."""
+    scenario(fake)
+    await cluster_combo_survey(ctx, data, request(enchants=("Critical Chance",)))
+    trade = get_trade(ctx)
+    real = trade.listings_for
+
+    async def ageing(*args: Any, **kwargs: Any) -> dict[str, Any]:
+        found = await real(*args, **kwargs)
+        if kwargs.get("cache_only"):
+            clock.advance(11 * 60)
+        return found
+
+    monkeypatch.setattr(trade, "listings_for", ageing)
+    payload, _ = await cluster_combo_survey(ctx, data, request(enchants=("Critical Chance",)))
+    assert len(fake.searches) == 2
+    assert [r["enchant"] for r in payload["ranking"]] == ["Critical Chance"]
+    assert payload["ranking"][0]["from_cache"] is True
+    assert payload["discovery"]["from_cache"] == 1 and payload["pending"] == []
+
+
+async def test_listings_exactly_at_threshold_are_not_below(
+    ctx: AppContext, fake: EnchantTrade, data: GameData
+) -> None:
+    """Both trade bounds include T: three PP+OM listings at exactly 1 divine come back in
+    both searches but count only at or above T, so the pair is a candidate, not not_sellable."""
+    scenario(fake)
+    at_t = [(1, "divine", (T_PP, T_OM))] * 3
+    fake.responses[(CRIT, "below")] = at_t
+    fake.responses[(CRIT, "above")] = at_t
+    payload, _ = await cluster_combo_survey(ctx, data, request(enchants=("Critical Chance",)))
+    row = payload["ranking"][0]
+    assert (row["candidates"], row["not_sellable"]) == (1, 0)
+    # Its provisional value is 195c less the 5% undercut, under T: not provisionally sellable.
+    assert row["provisional_sellable_pairs"] == 0 and row["p_any_provisional"] == 0
 
 
 async def test_unidentifiable_notable_skips_the_enchant(

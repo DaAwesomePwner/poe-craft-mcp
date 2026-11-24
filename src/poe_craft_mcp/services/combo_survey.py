@@ -4,8 +4,9 @@ For every enchant: the `cluster_combos` guards, then discovery only (two searche
 trade_cache_min). Candidates get a PROVISIONAL value from their discovery listings at or
 above T, and the exact odds engine gives the chance per attempt of landing any provisional
 sellable pair. Nothing is confirmed: `cluster_combos` confirms one enchant with exact pair
-searches and prices the whole craft. Enchants with fresh cached discovery go first (no
-requests), then live discovery until max_seconds or a rate limit; the rest stay pending.
+searches and prices the whole craft. Enchants with fresh cached discovery go first, read
+straight from the cache (no requests), then live discovery one band at a time until
+max_seconds, a rate limit or a stale band; the rest stay pending.
 Only instant-buyout listings are used, never whisper listings.
 """
 
@@ -24,14 +25,14 @@ from poe_craft_mcp.gamedata.combo_pairs import SMALL_TAG
 from poe_craft_mcp.gamedata.lookup import resolve_base
 from poe_craft_mcp.gamedata.models import FETCH_HINT, ClusterEnchant, GameData, GameDataError
 from poe_craft_mcp.services.cluster_combos import _rates
+from poe_craft_mcp.services.combo_discovery import Discovery
 from poe_craft_mcp.services.combo_report import unique, unique_sources
 from poe_craft_mcp.services.combo_request import ComboRequest
+from poe_craft_mcp.services.combo_survey_discovery import Failed, Stop, survey_discovery
 from poe_craft_mcp.services.combo_survey_enchant import (
     Plan,
-    cached_fresh,
     evaluate,
     plan_enchant,
-    run_discovery,
     select_enchants,
     skip_row,
 )
@@ -40,10 +41,8 @@ from poe_craft_mcp.services.combo_survey_report import (
     continue_note,
     rank,
     rate_warnings,
-    stop_reason,
     truncation_report,
 )
-from poe_craft_mcp.services.trade_pricing import PricingUnavailable
 
 __all__ = ["SurveyRequest", "cluster_combo_survey"]
 
@@ -144,41 +143,44 @@ async def cluster_combo_survey(
 
     clock = ctx.cache.clock
     deadline = clock() + req.max_seconds
-    fresh = [await cached_fresh(ctx, league, p, threshold, req.discovery_sample) for p in plans]
-    queue = [p for p, f in zip(plans, fresh, strict=True) if f]
-    queue += [p for p, f in zip(plans, fresh, strict=True) if not f]
-    n_cached = sum(fresh)
-    rows, discs, sources = [], [], [currency.sources()]
+    found: list[tuple[Plan, Discovery]] = []
+    live: list[Plan] = []
+    for plan in plans:  # cache phase: never makes a request
+        args = (ctx, league, plan, req, threshold, rates)
+        got = await survey_discovery(*args, deadline=deadline, cache_only=True)
+        if isinstance(got, Discovery):
+            found.append((plan, got))
+        else:
+            live.append(plan)
+    n_cached = len(found)
     stopped, retry_after, pending = None, None, []
-    for i, plan in enumerate(queue):
-        if i >= n_cached and clock() >= deadline:
-            stopped, pending = "max_seconds time budget spent", queue[i:]
+    for i, plan in enumerate(live):
+        if clock() >= deadline:
+            stopped, pending = "max_seconds time budget spent", live[i:]
             break
-        try:
-            disc = await run_discovery(ctx, league, plan, req, threshold, rates, deadline)
-        except PricingUnavailable as exc:
-            if exc.retry_after is None:
-                skipped.append(skip_row(plan.enchant, f"discovery failed: {exc.reason}"))
-                continue
-            retry_after = math.ceil(exc.retry_after)
-            stopped, pending = stop_reason(exc.retry_after, clock(), deadline), queue[i:]
+        args = (ctx, league, plan, req, threshold, rates)
+        got = await survey_discovery(*args, deadline=deadline, cache_only=False)
+        if isinstance(got, Discovery):
+            found.append((plan, got))
+        elif isinstance(got, Failed):
+            skipped.append(skip_row(plan.enchant, got.reason))
+        elif isinstance(got, Stop):  # rate limit, deadline or a stale band: stays pending
+            stopped, pending = got.reason, live[i:]
+            retry_after = None if got.retry_after is None else math.ceil(got.retry_after)
             break
-        if any(src.get("stale") for src in disc.sources):  # never used: stays pending
-            stopped = "the trade site served only a stale cached copy (rate limited or failing)"
-            pending = queue[i:]
-            break
-        rows.append(await evaluate(data, req, plan, disc, threshold, undercut, per_divine))
-        discs.append((plan, disc))
-        sources.append(disc.sources)
 
-    ranking = rank(rows, [p.enchant.id for p in plans])
+    scored, sources = [], [currency.sources()]
+    for plan, disc in found:
+        scored.append(await evaluate(data, req, plan, disc, threshold, undercut, per_divine))
+        sources.append(disc.sources)
+    ranking = rank(scored)
     out.update(
         ranking=ranking[: req.limit],
         ranked_count=len(ranking),
         pending=[{"enchant": p.enchant.name, "enchant_id": p.enchant.id} for p in pending],
         stopped=stopped,
         retry_after_seconds=retry_after,
-        discovery=truncation_report(discs, sum(r["from_cache"] for r in rows)),
+        discovery=truncation_report(found, n_cached),
         next_step="confirm the top enchants with cluster_combos (exact pair searches, miss "
         "value, base and orb costs, profit per hour) before crafting",
     )

@@ -35,27 +35,28 @@ def register(server: MCPServer, ctx: AppContext) -> None:
         enchants: list[str] | None = None,
         limit: int = 10,
     ) -> dict[str, Any]:
-        """Which cluster jewel enchant has the most notable pairs worth at least
-        `min_value_div` divines, so a craft lands more different sellable combos.
+        """Which cluster jewel enchant gives the best chance per attempt of landing a notable
+        pair worth at least `min_value_div` divines.
 
         Inputs: `base` ('Medium Cluster Jewel' or 'Large Cluster Jewel'; a Small one holds one
         notable, so it has no pairs), `passives` (added passive count; sales are searched with
         exactly this count), `ilvl` (item level the odds are computed at), optional `enchants`
         (names or ids; default every current enchant of the base with a trade filter).
         For each enchant: two cheap discovery searches (rares with 2+ of its notables priced
-        below / at or above the threshold, `discovery_sample` 1-100 listings each). A
-        candidate pair (fewer than `min_listings` listings below, some at or above) gets a
-        PROVISIONAL value: its `min_listings`-th cheapest listing at or above the threshold
-        (the cheapest when fewer), less the undercut. Pairs worth at least the threshold feed
-        the exact odds of the Alteration/Augmentation anchor cycle plus one Regal.
+        strictly below / at or above the threshold, `discovery_sample` 1-100 listings each).
+        A candidate pair (fewer than `min_listings` listings below, some at or above) gets a
+        PROVISIONAL value: the `min_listings`-th cheapest listing at or above the threshold,
+        or the cheapest one when fewer are listed, less undercut. Pairs worth at least the
+        threshold feed the exact odds of the Alteration/Augmentation anchor cycle plus one Regal.
         Returns a ranking (by p_any_provisional, then sellable pair count; at most `limit`
         rows) with the provisional sellable, candidate and not_sellable counts, the chance per
         attempt, expected attempts per hit, provisional hit value per attempt and the top
         pairs; plus skipped enchants with reasons, pending ones, discovery totals, sources,
         assumptions and warnings. Nothing is confirmed: run `cluster_combos` on the top
         enchants for exact pair prices and profit. Enchants with fresh cached searches go
-        first; live searches run until `max_seconds` or a rate limit, the rest are pending:
-        call again to continue. Only instant-buyout listings are used, never whisper listings.
+        first, from the cache with no request; live searches run until `max_seconds`, a rate
+        limit or a stale reply, the rest are pending (with the retry hint): call again.
+        Only instant-buyout listings are used, never whisper listings.
         """
         req = SurveyRequest(
             base=base,

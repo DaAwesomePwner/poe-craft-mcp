@@ -36,8 +36,12 @@ One cycle, in words:
   pair.
 
 `p_any` (`p_any_sellable` in `cluster_combos`, `p_any_provisional` in the survey) is the chance
-per attempt of a hit. More sellable pairs on one enchant means more anchors and more pairs to
-land, which is why the survey ranks enchants by it.
+per attempt of a hit. Another sellable pair does not always raise it. A pair that brings a new
+notable adds an anchor, so the cycle stops sooner and costs fewer Alterations, but if that
+anchor rarely completes a sellable pair, stopping on it can lower the chance per attempt. A
+pair between two notables that are already anchors (A+C next to A+B and B+C) adds no anchor;
+it only turns more of the rares you already make into hits. The survey therefore ranks by
+`p_any_provisional` itself, and uses the pair count only to break ties.
 
 ## Discovery and confirmation
 
@@ -46,31 +50,46 @@ base type, rare, not corrupted, the enchant and exactly the given passive count,
 level filter.
 
 **Discovery** is two broad searches per enchant over the notables that have their own trade
-id: rares with two or more of them priced at most T (search A) and at T or more (search B),
-`discovery_sample` cheapest listings each (at most 100). Listings are grouped by the notables
-they show. A listing showing any third notable the base can roll at any item level is never
-counted as a pair listing. Each legal, priceable pair falls in one class:
+id: rares with two or more of them priced at most T (search A) and at least T (search B),
+`discovery_sample` cheapest listings each (at most 100). Both trade bounds include T, so each
+band then keeps only its own side, with prices converted at poe.ninja rates: search A counts
+listings strictly below T and search B those at T or more. A listing exactly at T is never
+"below" (each band reports the rest as `outside_band_listings`). Listings are grouped by the
+notables they show. A listing showing any third notable the base can roll at any item level is
+never counted as a pair listing. Each legal, priceable pair falls in one class:
 
-| Class | Rule |
+| Class | Rule (below = price < T, at or above = price >= T) |
 | --- | --- |
 | `not_sellable` | `min_listings` or more listings below T |
 | `candidate` | fewer than `min_listings` below T and at least one at or above T |
 | `thin` | only below T, fewer than `min_listings` |
 | `unlisted` | never seen |
 
-**Provisional value (survey only).** A candidate's provisional value is its `min_listings`-th
-cheapest listing at or above T from search B (its cheapest one there when it has fewer), less
-the undercut. It is provisionally sellable when that value is at least T. The survey feeds those
-values to the exact odds and reports `p_any_provisional` and the hit value per attempt, with no
-miss value and no costs.
+**Provisional value (survey only).** A candidate's provisional value is the `min_listings`-th
+cheapest listing at or above T, or the cheapest one when fewer are listed, less undercut (a
+seller must undercut the cheapest competing listing). It is provisionally sellable when that
+value is at least T. The survey feeds those values to the exact odds and reports
+`p_any_provisional` and the hit value per attempt, with no miss value and no costs. It ranks
+enchants by the unrounded `p_any_provisional`, then by the number of provisionally sellable
+pairs, then by enchant id.
+
+**Survey order.** Enchants whose two discovery searches are cached and fresh are surveyed first,
+straight from the cached listings with no request. The rest are searched live, one band at a
+time, until `max_seconds`, a rate limit or a stale reply (the trade site refused a new search
+and an expired copy was served). The survey stops there with the retry hint, never uses the
+stale copy, and lists that enchant and the rest as `pending`; calling again continues from the
+cache. Enchants with a legacy tag, no trade option, no priceable pair or a notable without any
+explicit trade id are skipped with a reason.
 
 **Confirmation (`cluster_combos`).** Candidates are priced with their exact pair search, most
 likely first (spawn-weight product). That search requires both notables and excludes every
 other notable the base can roll at any item level. A pair is **sellable** when the p25 of its
 cheapest listings, less the undercut, is at least T and it has at least `min_listings`
 listings. Cached searches are reused first, then at most `max_pair_searches` live searches run
-within `max_seconds`. A copy served from an expired cache (the trade site refused a new search)
-never confirms a pair.
+per call within `max_seconds`; candidates left over are reported as unconfirmed, and calling
+again continues. The odds and economics count only the pairs confirmed sellable so far, so an
+unconfirmed candidate is treated as a miss until it is confirmed. A copy served from an expired
+cache (the trade site refused a new search) never confirms a pair.
 
 ## Miss value and the white base
 
@@ -102,8 +121,9 @@ fixes it.
 ## Threshold and undercut
 
 T is set in divines and converted at the poe.ninja Divine rate. Discovery price bounds use the
-trade site's own chaos-equivalent conversion, while listings are converted at poe.ninja rates,
-so a listing priced very close to T can land on either side. Sale values subtract
+trade site's own chaos-equivalent conversion, while the bands are split at poe.ninja rates. A
+listing priced very close to T in a currency the two convert differently can fall outside the
+band of the search that returned it and be counted in neither band. Sale values subtract
 `undercut_pct` (5% by default) to model listing below the competition; the white base and the
 orbs are bought, so they have no undercut.
 

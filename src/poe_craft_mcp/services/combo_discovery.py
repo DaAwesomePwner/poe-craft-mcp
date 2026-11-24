@@ -1,9 +1,11 @@
 """Discovery: two broad instant-buyout searches that show which notable pairs may sell.
 
 Search A finds rares with two or more priceable notables priced at most the threshold T,
-search B the same at T or more. Listings are grouped by the notables they hold; a pair seen
-`min_listings` times below T is not sellable, one seen above T (and rarely below) is a
-candidate that the exact pair search must confirm.
+search B the same at T or more. Both trade bounds include T, so each band then keeps only its
+own side at poe.ninja rates: A counts listings strictly below T, B those at T or more. Listings
+are grouped by the notables they hold; a pair seen `min_listings` times below T is not
+sellable, one seen at or above T (and rarely below) is a candidate that the exact pair search
+must confirm.
 """
 
 from __future__ import annotations
@@ -38,6 +40,8 @@ class Tally:
     never attributed to a pair."""
     unmatched_listings: int = 0
     """Listings showing fewer than two of the notables (e.g. missing stat data)."""
+    outside_band_listings: int = 0
+    """Listings whose converted price falls outside this band (e.g. exactly T in search A)."""
     dropped_unknown_currency: dict[str, int] = field(default_factory=dict)
 
     @property
@@ -51,6 +55,7 @@ class Tally:
             "pair_listings": sum(len(v) for v in self.pairs.values()),
             "multi_notable_listings": self.multi_notable_listings,
             "unmatched_listings": self.unmatched_listings,
+            "outside_band_listings": self.outside_band_listings,
             "dropped_unknown_currency": dict(sorted(self.dropped_unknown_currency.items())),
         }
 
@@ -70,11 +75,16 @@ def tally(
     mod_by_trade: Mapping[str, str],
     total: int,
     other_ids: Iterable[str] = (),
+    *,
+    below: float | None = None,
+    at_least: float | None = None,
 ) -> Tally:
     """Group listings by the notables (`mod_by_trade`: trade id -> mod id) they show.
 
     `other_ids` are trade ids of any other notable the base can roll at any item level; a
-    listing showing one of them holds a third notable and is never a pair listing."""
+    listing showing one of them holds a third notable and is never a pair listing. With
+    `below`, only listings priced strictly below it (in chaos) count; with `at_least`, only
+    those priced at it or more."""
     others = frozenset(other_ids) - mod_by_trade.keys()
     found = Tally(total=total)
     pairs: defaultdict[Pair, list[float]] = defaultdict(list)
@@ -89,11 +99,15 @@ def tally(
         if not isinstance(amount, int | float) or not math.isfinite(amount) or amount <= 0:
             found.unmatched_listings += 1
             continue
+        price = float(amount) * rate
+        if (below is not None and price >= below) or (at_least is not None and price < at_least):
+            found.outside_band_listings += 1
+            continue
         stats = item.get("explicit_stats") or []
         held = {mod_by_trade[s] for s in stats if s in mod_by_trade}
         notables = len(held) + bool(others.intersection(stats))
         if len(held) == 2 and notables == 2:
-            pairs[frozenset(held)].append(float(amount) * rate)
+            pairs[frozenset(held)].append(price)
         elif notables > 2:
             found.multi_notable_listings += 1
         else:
@@ -106,7 +120,9 @@ def tally(
 def classify(
     pairs: Iterable[Pair], below: Tally, above: Tally, min_listings: int
 ) -> dict[Pair, str]:
-    """not_sellable: >= min_listings below T; candidate: fewer below and some at T or more;
+    """Counts come from the `tally` bands (below: < T, above: >= T).
+
+    not_sellable: >= min_listings below T; candidate: fewer below and some at T or more;
     thin: only below, fewer than min_listings; unlisted: never seen."""
     classes = {}
     for pair in pairs:
@@ -173,7 +189,7 @@ async def discover(
         query = discovery_query(jewel, mod_by_trade.keys(), **bound)
         found, src = await search_listings(ctx, league, query, sample, deadline)
         tallies.append(
-            tally(found["listings"], rates, mod_by_trade, int(found["total"]), other_ids)
+            tally(found["listings"], rates, mod_by_trade, int(found["total"]), other_ids, **bound)
         )
         sources.append(src)
     below, above = tallies

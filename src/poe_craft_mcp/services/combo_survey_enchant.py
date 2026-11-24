@@ -1,5 +1,5 @@
-"""One enchant in `cluster_combo_survey`: selection, the `cluster_combos` guards, the cache
-probe, and the provisional value of its discovery candidates.
+"""One enchant in `cluster_combo_survey`: selection, the `cluster_combos` guards and the
+provisional value of its discovery candidates.
 
 Provisional means discovery prices only: no exact pair search confirms them (`cluster_combos`
 does that).
@@ -8,25 +8,23 @@ does that).
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Mapping, Sequence
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from poe_craft_mcp.clients.trade import TradeError, get_trade
-from poe_craft_mcp.context import AppContext
 from poe_craft_mcp.gamedata.cluster import LEGACY_TAG_PREFIX, resolve_enchant
 from poe_craft_mcp.gamedata.combo_pairs import ClusterNotables
 from poe_craft_mcp.gamedata.combos import cluster_notables, combo_odds
 from poe_craft_mcp.gamedata.models import ClusterEnchant, ClusterJewel, GameData
 from poe_craft_mcp.services.combo_costs import chance, money
-from poe_craft_mcp.services.combo_discovery import Discovery, discover
+from poe_craft_mcp.services.combo_discovery import Discovery
 from poe_craft_mcp.services.combo_notables import (
     Priceable,
     exclusion_ids,
     notable_name,
     priceable,
 )
-from poe_craft_mcp.services.combo_queries import JewelFilter, discovery_query
+from poe_craft_mcp.services.combo_queries import JewelFilter
 from poe_craft_mcp.services.combo_report import classes_report
 
 if TYPE_CHECKING:
@@ -94,50 +92,10 @@ def plan_enchant(data: GameData, req: SurveyRequest, enchant: ClusterEnchant) ->
     return Plan(enchant, info, split, excluded, jewel)
 
 
-async def cached_fresh(
-    ctx: AppContext, league: str, plan: Plan, threshold: float, sample: int
-) -> bool:
-    """True when both discovery searches are cached and younger than trade_cache_min.
-    Makes no request."""
-    trade = get_trade(ctx)
-    for bound in ({"below": threshold}, {"at_least": threshold}):
-        query = discovery_query(plan.jewel, plan.split.mod_by_trade.keys(), **bound)
-        try:
-            found = await trade.listings_for(league, query, sample, cache_only=True)
-        except TradeError:  # NotCached
-            return False
-        if found["stale"]:
-            return False
-    return True
-
-
-async def run_discovery(
-    ctx: AppContext,
-    league: str,
-    plan: Plan,
-    req: SurveyRequest,
-    threshold: float,
-    rates: Mapping[str, float],
-    deadline: float,
-) -> Discovery:
-    return await discover(
-        ctx,
-        league,
-        plan.jewel,
-        plan.split.mod_by_trade,
-        plan.excluded,
-        plan.split.pairs,
-        threshold,
-        sample=req.discovery_sample,
-        min_listings=req.min_listings,
-        rates=rates,
-        deadline=deadline,
-    )
-
-
 def provisional_value(above: Sequence[float], min_listings: int, undercut: float) -> float:
-    """The min_listings-th cheapest listing at or above T (the cheapest one when there are
-    fewer), less the undercut. `above` is sorted ascending and not empty."""
+    """The min_listings-th cheapest listing at or above T, or the cheapest one when fewer are
+    listed, less undercut (a seller must undercut the cheapest competing listing). `above` is
+    sorted ascending and not empty."""
     k = min_listings if len(above) >= min_listings else 1
     return above[k - 1] * (1 - undercut)
 
@@ -159,8 +117,8 @@ async def evaluate(
     threshold: float,
     undercut: float,
     per_divine: float,
-) -> dict[str, Any]:
-    """The ranking row of one enchant from its discovery result."""
+) -> tuple[float, dict[str, Any]]:
+    """The unrounded p_any_provisional (for ranking) and the ranking row of one enchant."""
     candidates = [p for p, c in disc.classes.items() if c == "candidate"]
     values = {
         p: provisional_value(disc.above.pairs[p], req.min_listings, undercut) for p in candidates
@@ -174,7 +132,7 @@ async def evaluate(
         p_any, hit_value = odds.p_hit, odds.expected_hit_value
     top = sorted(sellable, key=lambda p: (-sellable[p], sorted(p)))[:TOP_PAIRS]
     classes = classes_report(disc)
-    return {
+    return p_any, {
         "enchant": plan.enchant.name,
         "enchant_id": plan.enchant.id,
         "provisional_sellable_pairs": len(sellable),
