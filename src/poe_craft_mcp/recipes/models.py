@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from typing import Annotated, Literal, Self
+from typing import Annotated, Any, Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -11,15 +11,21 @@ MIN_VERIFIED_PATCH = (3, 30, 0)
 PROBABILITY_TOLERANCE = 1e-6
 
 Version = tuple[int, int, int]
-Probability = Annotated[float, Field(gt=0, le=1)]
-_VERSION = re.compile(r"(\d+)\.(\d+)(?:\.(\d+))?")
+Probability = Annotated[float, Field(gt=0, le=1, allow_inf_nan=False)]
+Positive = Annotated[float, Field(gt=0, allow_inf_nan=False)]
+NonNegative = Annotated[float, Field(ge=0, allow_inf_nan=False)]
+Text = Annotated[str, Field(min_length=1)]
+_VERSION = re.compile(r"([0-9]+)[a-z]?\.([0-9]+)[a-z]?(?:\.([0-9]+)[a-z]?)?")
 
 
 def parse_version(text: str) -> Version:
-    """Parse `3.30` or `3.30.0` into a comparable tuple (so 3.9 < 3.30)."""
+    """Parse `3.30`, `3.30.0` or `3.30.1b` into a comparable tuple (so 3.9 < 3.30).
+
+    Letter suffixes on a component are accepted and ignored in comparisons.
+    """
     match = _VERSION.fullmatch(text.strip())
     if match is None:
-        raise ValueError(f"not a patch version like 3.30 or 3.30.0: {text!r}")
+        raise ValueError(f"not a patch version like 3.30, 3.30.0 or 3.30.1b: {text!r}")
     return int(match[1]), int(match[2]), int(match[3] or 0)
 
 
@@ -37,7 +43,7 @@ class NinjaMaterial(_Model):
     category: str = Field(min_length=1)
     name: str | None = Field(None, min_length=1)
     id: str | None = Field(None, min_length=1)
-    qty: float = Field(gt=0)
+    qty: Positive
 
     @model_validator(mode="after")
     def _name_xor_id(self) -> Self:
@@ -47,7 +53,7 @@ class NinjaMaterial(_Model):
 
 class FixedMaterial(_Model):
     source: Literal["fixed"]
-    chaos: float = Field(ge=0)
+    chaos: NonNegative
     label: str = Field(min_length=1)
 
 
@@ -57,7 +63,7 @@ Material = Annotated[NinjaMaterial | FixedMaterial, Field(discriminator="source"
 class WeightsChance(_Model):
     p_source: Literal["weights"]
     method: str = Field(min_length=1)
-    target_mods: list[str] = Field(min_length=1)
+    target_mods: list[Text] = Field(min_length=1)
     base: str | None = None
     ilvl: int | None = Field(None, ge=1, le=100)
 
@@ -118,7 +124,7 @@ class Outcome(_Model):
     name: str = Field(min_length=1)
     probability: Probability
     trade_url: str | None = Field(None, min_length=1)
-    fixed_chaos: float | None = Field(None, ge=0)
+    fixed_chaos: NonNegative | None = None
     use_salvage: bool = False
 
     @model_validator(mode="after")
@@ -137,7 +143,7 @@ class Salvage(_Model):
 
     trade_url: str | None = Field(None, min_length=1)
     lookup: NinjaLookup | None = None
-    fixed_chaos: float | None = Field(None, ge=0)
+    fixed_chaos: NonNegative | None = None
 
     @model_validator(mode="after")
     def _one_value(self) -> Self:
@@ -153,17 +159,17 @@ class Salvage(_Model):
 class Recipe(_Model):
     id: str = Field(pattern=r"^[a-z0-9][a-z0-9_-]*$")
     name: str = Field(min_length=1)
-    tags: list[str] = Field(default_factory=list)
+    tags: list[Text] = Field(default_factory=list)
     status: Literal["verified", "unverified", "deprecated"]
     verified_patch: str | None = None
-    sources: list[str] = Field(default_factory=list)
-    requires: list[str] = Field(default_factory=list)
-    budget_div: float | None = Field(None, ge=0)
+    sources: list[Text] = Field(default_factory=list)
+    requires: list[Text] = Field(default_factory=list)
+    budget_div: NonNegative | None = None
     base: Base
     steps: list[Step] = Field(min_length=1)
     outcomes: list[Outcome] = Field(min_length=1)
     salvage: Salvage
-    minutes: float = Field(gt=0)
+    minutes: Positive
     notes: str = ""
 
     @model_validator(mode="after")
@@ -185,6 +191,11 @@ class Recipe(_Model):
             and self.verified_patch is not None
             and parse_version(self.verified_patch) >= MIN_VERIFIED_PATCH
         )
+
+    def to_document(self) -> dict[str, Any]:
+        """JSON-ready dict with only supplied fields, so it validates against the schema
+        again when saved as a recipe file."""
+        return self.model_dump(mode="json", exclude_none=True, exclude_defaults=True)
 
     def trade_urls(self) -> list[str]:
         urls = [self.base.trade_url, self.salvage.trade_url]

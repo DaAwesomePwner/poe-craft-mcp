@@ -21,6 +21,10 @@ from poe_craft_mcp.recipes.models import Recipe
 log = logging.getLogger(__name__)
 
 RECIPES_ENV_VAR = "POE_CRAFT_RECIPES"
+SETUP_HINT = (
+    f"set {RECIPES_ENV_VAR} to the folder holding your recipe *.yaml files, "
+    "or launch with `uv --directory <repo> run poe-craft-mcp`"
+)
 MAX_REASONS = 3
 
 
@@ -51,6 +55,7 @@ class RecipeError:
 class RecipeListing:
     recipes: list[Recipe]
     hidden_unverified: int
+    hidden_no_budget: int = 0
 
 
 @dataclass
@@ -60,15 +65,24 @@ class RecipeStore:
     directory: Path
     recipes: dict[str, Recipe] = field(default_factory=dict)
     errors: list[RecipeError] = field(default_factory=list)
+    problem: str | None = None
 
     @classmethod
     def load(cls, directory: Path | None = None) -> RecipeStore:
         store = cls(directory or resolve_recipes_dir())
         _validator()
-        if not store.directory.is_dir():
-            log.warning("recipes directory not found: %s", store.directory)
-            return store
-        for path in sorted(store.directory.glob("*.yaml")):
+        try:
+            files = sorted(store.directory.glob("*.yaml")) if store.directory.is_dir() else None
+        except OSError as exc:
+            files = None
+            log.warning("cannot list recipes directory %s: %s", store.directory, exc)
+        if files is None:
+            store.problem = f"recipes directory not found: {store.directory}; {SETUP_HINT}"
+        elif not files:
+            store.problem = f"no recipe *.yaml files in {store.directory}; {SETUP_HINT}"
+        if store.problem:
+            log.warning("%s", store.problem)
+        for path in files or []:
             store._add_file(path)
         log.info(
             "loaded %d recipes from %s (%d skipped)",
@@ -83,9 +97,10 @@ class RecipeStore:
             recipe = parse_recipe_file(path)
             if recipe.id in self.recipes:
                 raise ValueError(f"duplicate recipe id {recipe.id!r}")
-        except ValueError as exc:
-            log.warning("skipping recipe %s: %s", path.name, exc)
-            self.errors.append(RecipeError(path.name, str(exc)))
+        except Exception as exc:
+            reason = str(exc) if isinstance(exc, ValueError) else f"{type(exc).__name__}: {exc}"
+            log.warning("skipping recipe %s: %s", path.name, reason)
+            self.errors.append(RecipeError(path.name, reason))
             return
         self.recipes[recipe.id] = recipe
 
@@ -104,24 +119,28 @@ class RecipeStore:
     ) -> RecipeListing:
         """Recipes matching any given tag and within budget, never deprecated ones.
 
-        Recipes without `budget_div` pass the budget filter. `hidden_unverified` counts
-        matches left out because they are not verified.
+        With a budget cap, recipes without `budget_div` are left out (`hidden_no_budget`);
+        `hidden_unverified` counts the rest that are left out because they are not verified.
         """
         wanted = {tag.lower() for tag in tags or []}
         shown: list[Recipe] = []
-        hidden = 0
+        hidden = no_budget = 0
         for recipe in self.recipes.values():
             if recipe.status == "deprecated":
                 continue
             if wanted and not wanted & {tag.lower() for tag in recipe.tags}:
                 continue
-            if max_budget_div is not None and (recipe.budget_div or 0) > max_budget_div:
-                continue
+            if max_budget_div is not None:
+                if recipe.budget_div is None:
+                    no_budget += 1
+                    continue
+                if recipe.budget_div > max_budget_div:
+                    continue
             if recipe.is_verified or include_unverified:
                 shown.append(recipe)
             else:
                 hidden += 1
-        return RecipeListing(shown, hidden)
+        return RecipeListing(shown, hidden, no_budget)
 
 
 def parse_recipe_file(path: Path) -> Recipe:

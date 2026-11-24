@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import logging
+import shutil
 from importlib import resources
 from pathlib import Path
 from typing import Any
@@ -98,7 +99,33 @@ def test_missing_directory_gives_empty_store(
     with caplog.at_level(logging.WARNING, logger=LOADER_LOGGER):
         store = RecipeStore.load(tmp_path / "nope")
     assert store.recipes == {} and store.errors == []
-    assert "not found" in caplog.text
+    assert str(tmp_path / "nope") in caplog.text and RECIPES_ENV_VAR in caplog.text
+    assert store.problem is not None and "not found" in store.problem
+
+
+def test_directory_without_yaml_files_warns_with_setup_hint(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    with caplog.at_level(logging.WARNING, logger=LOADER_LOGGER):
+        store = RecipeStore.load(tmp_path)
+    assert store.problem is not None and str(tmp_path) in store.problem
+    assert RECIPES_ENV_VAR in caplog.text and "no recipe *.yaml files" in caplog.text
+
+
+@pytest.mark.parametrize(
+    "yaml_text",
+    ["id: !!bool maybe", "id: !!int nope", "id: !!timestamp zz", "a: !!python/name:os.system"],
+)
+def test_malformed_tagged_yaml_does_not_hide_neighbours(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture, yaml_text: str
+) -> None:
+    (tmp_path / "a-bad.yaml").write_text(yaml_text, encoding="utf-8")
+    shutil.copy(RECIPE_FIXTURES / "verified-alt-spam.yaml", tmp_path / "b-good.yaml")
+    with caplog.at_level(logging.WARNING, logger=LOADER_LOGGER):
+        store = RecipeStore.load(tmp_path)
+    assert store.ids() == ["verified-alt-spam"]
+    assert [e.file for e in store.errors] == ["a-bad.yaml"]
+    assert "skipping recipe a-bad.yaml" in caplog.text
 
 
 def test_non_mapping_and_unreadable_files(tmp_path: Path) -> None:
@@ -174,8 +201,24 @@ def test_listing_tag_and_budget_filters() -> None:
     assert store.list(tags=["essence"]).recipes == []
     assert store.list(tags=["essence"]).hidden_unverified == 1
     cheap = store.list(max_budget_div=2, include_unverified=True)
-    assert [r.id for r in cheap.recipes] == ["stale-patch", "unverified-flip", "verified-alt-spam"]
+    assert [r.id for r in cheap.recipes] == ["stale-patch", "verified-alt-spam"]
+    assert cheap.hidden_no_budget == 1
     assert [r.id for r in store.list(max_budget_div=1).recipes] == ["verified-alt-spam"]
+
+
+def test_budget_cap_excludes_unknown_cost_and_keeps_explicit_zero(tmp_path: Path) -> None:
+    for name, budget in [("free", 0), ("unknown", None), ("pricey", 5)]:
+        data = mutated(id=name, name=name)
+        data.pop("budget_div")
+        if budget is not None:
+            data["budget_div"] = budget
+        (tmp_path / f"{name}.yaml").write_text(yaml.safe_dump(data), encoding="utf-8")
+    store = RecipeStore.load(tmp_path)
+    capped = store.list(max_budget_div=0)
+    assert [r.id for r in capped.recipes] == ["free"]
+    assert capped.hidden_no_budget == 1
+    assert store.list().hidden_no_budget == 0
+    assert [r.id for r in store.list().recipes] == ["free", "pricey", "unknown"]
 
 
 def test_resolve_recipes_dir_order(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -222,6 +265,15 @@ REJECTED_BY_BOTH: dict[str, dict[str, Any]] = {
     "guide chance above one": {
         "steps": [{"action": "a", "p_success": {"p_source": "guide", "value": 1.2}}]
     },
+    "empty target mod": {
+        "steps": [
+            {
+                "action": "a",
+                "p_success": {"p_source": "weights", "method": "chaos", "target_mods": [""]},
+            }
+        ]
+    },
+    "empty tag": {"tags": [""]},
     "repeat without chance": {"steps": [{"action": "a", "repeat_until": "done"}]},
 }
 
@@ -252,3 +304,64 @@ def test_parse_recipe_file_reports_schema_paths(tmp_path: Path) -> None:
     path.write_text(yaml.safe_dump(data), encoding="utf-8")
     with pytest.raises(ValueError, match=r"schema: steps/0/p_success.*target_mods"):
         parse_recipe_file(path)
+
+
+@pytest.mark.parametrize("patch", ["3.30.1b", "3.30b", "3.31", "4.0.0a"])
+def test_letter_suffixed_patches_are_accepted(patch: str, tmp_path: Path) -> None:
+    data = mutated(verified_patch=patch)
+    assert schema_problems(data) == []
+    path = tmp_path / "r.yaml"
+    path.write_text(yaml.safe_dump(data), encoding="utf-8")
+    assert parse_recipe_file(path).is_verified
+
+
+def test_letter_suffix_is_ignored_when_comparing() -> None:
+    assert parse_version("3.30.1b") == (3, 30, 1)
+    assert parse_version("3.29.9z") < (3, 30, 0)
+    assert not Recipe.model_validate(mutated(verified_patch="3.29.9z")).is_verified
+
+
+@pytest.mark.parametrize("bad", [float("inf"), float("-inf"), float("nan")])
+@pytest.mark.parametrize(
+    "path",
+    [
+        ("outcomes", 1, "fixed_chaos"),
+        ("outcomes", 0, "probability"),
+        ("salvage", "fixed_chaos"),
+        ("budget_div",),
+        ("minutes",),
+        ("steps", 0, "materials", 0, "qty"),
+        ("steps", 0, "materials", 1, "chaos"),
+        ("steps", 0, "p_success", "value"),
+    ],
+)
+def test_non_finite_numbers_are_rejected(
+    path: tuple[str | int, ...], bad: float, tmp_path: Path
+) -> None:
+    data = mutated(salvage={"fixed_chaos": 0})
+    data["steps"][0]["materials"][0].pop("name")
+    data["steps"][0]["materials"][0]["id"] = "orb"
+    target: Any = data
+    for key in path[:-1]:
+        target = target[key]
+    target[path[-1]] = bad
+    file = tmp_path / "r.yaml"
+    file.write_text(yaml.safe_dump(data), encoding="utf-8")
+    with pytest.raises(ValueError):
+        parse_recipe_file(file)
+    with pytest.raises(ValidationError):
+        Recipe.model_validate(data)
+
+
+def test_to_document_round_trips_through_yaml(tmp_path: Path) -> None:
+    sources = [REPO_RECIPES, RECIPE_FIXTURES]
+    originals = [r for d in sources for r in RecipeStore.load(d).recipes.values()]
+    assert len(originals) >= 8
+    for original in originals:
+        document = original.to_document()
+        assert all(o.get("use_salvage", True) is True for o in document["outcomes"])
+        assert None not in str(document).split()
+        path = tmp_path / f"{original.id}.yaml"
+        path.write_text(yaml.safe_dump(document, sort_keys=False), encoding="utf-8")
+        assert schema_problems(yaml.safe_load(path.read_text(encoding="utf-8"))) == []
+        assert parse_recipe_file(path) == original

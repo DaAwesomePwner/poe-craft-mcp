@@ -1,17 +1,20 @@
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import Any
 
 import pytest
+import yaml
 from mcp import Client
 
 from poe_craft_mcp.config import Config
 from poe_craft_mcp.context import AppContext
-from poe_craft_mcp.recipes.loader import RECIPES_ENV_VAR, RecipeStore
+from poe_craft_mcp.recipes.loader import RECIPES_ENV_VAR, RecipeStore, parse_recipe_file
 from poe_craft_mcp.server import build_server
 from poe_craft_mcp.tools.recipes import get_recipe_store
 
+REPO_RECIPES = Path(__file__).resolve().parents[1] / "recipes"
 RECIPE_FIXTURES = Path(__file__).resolve().parent / "fixtures" / "recipes"
 SUMMARY_KEYS = {
     "id",
@@ -96,10 +99,20 @@ async def test_list_recipes_filters_and_empty_reason(config: Config) -> None:
     _, data = await call(config, "list_recipes", {"tags": ["harvest"]})
     assert data["reason"] == "no recipes match the given filters"
     _, data = await call(config, "list_recipes", {"max_budget_div": 1, "include_unverified": True})
-    by_id = {r["id"]: r for r in data["recipes"]}
-    assert set(by_id) == {"unverified-flip", "verified-alt-spam"}
-    assert any("budget_div is not set" in w for w in by_id["unverified-flip"]["warnings"])
-    assert not any("budget_div" in w for w in by_id["verified-alt-spam"]["warnings"])
+    assert ids(data) == ["verified-alt-spam"]
+    assert data["hidden_no_budget"] == 1
+
+
+async def test_budget_cap_reason_mentions_recipes_without_budget(config: Config) -> None:
+    _, data = await call(
+        config,
+        "list_recipes",
+        {"tags": ["base-flip"], "max_budget_div": 0, "include_unverified": True},
+    )
+    assert data["recipes"] == [] and data["hidden_no_budget"] == 1
+    assert "1 recipe without budget_div excluded by max_budget_div" in data["reason"]
+    _, data = await call(config, "list_recipes", {"tags": ["base-flip"], "max_budget_div": 0})
+    assert data["hidden_no_budget"] == 1 and data["hidden_unverified"] == 0
 
 
 async def test_empty_store_explains_why(config: Config, tmp_path: Path) -> None:
@@ -112,7 +125,7 @@ async def test_empty_store_explains_why(config: Config, tmp_path: Path) -> None:
         result = await client.call_tool("list_recipes", {})
     data = result.structured_content or {}
     assert data["recipes"] == []
-    assert "no valid recipes loaded" in data["reason"] and "1 files skipped" in data["reason"]
+    assert "no recipes loaded" in data["reason"] and "1 files skipped" in data["reason"]
 
 
 async def test_get_recipe_returns_full_json_and_warnings(config: Config) -> None:
@@ -143,3 +156,56 @@ def test_store_is_shared_per_context(config: Config) -> None:
     ctx = AppContext.create(config)
     assert get_recipe_store(ctx) is get_recipe_store(ctx)
     assert "deprecated-old" in get_recipe_store(ctx).recipes
+
+
+async def test_get_recipe_output_round_trips_through_yaml(config: Config, tmp_path: Path) -> None:
+    store = RecipeStore.load(RECIPE_FIXTURES)
+    store.recipes.update(RecipeStore.load(REPO_RECIPES).recipes)
+    ctx = AppContext.create(config)
+    ctx.services["recipes"] = store
+    async with Client(build_server(ctx=ctx)) as client:
+        for recipe_id, original in store.recipes.items():
+            result = await client.call_tool("get_recipe", {"id": recipe_id})
+            saved = tmp_path / f"{recipe_id}.yaml"
+            saved.write_text(yaml.safe_dump(result.structured_content["recipe"]), encoding="utf-8")
+            assert parse_recipe_file(saved) == original
+
+
+def test_registering_logs_skipped_files_at_startup(
+    config: Config, caplog: pytest.LogCaptureFixture
+) -> None:
+    with caplog.at_level(logging.WARNING, logger="poe_craft_mcp.recipes.loader"):
+        build_server(config)
+    assert "skipping recipe bad-probability.yaml" in caplog.text
+    assert "skipping recipe bad-yaml.yaml" in caplog.text
+
+
+async def test_server_starts_and_explains_when_every_recipe_is_invalid(
+    config: Config,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    broken = tmp_path / "broken"
+    broken.mkdir()
+    (broken / "a.yaml").write_text("id: !!bool maybe", encoding="utf-8")
+    monkeypatch.setenv(RECIPES_ENV_VAR, str(broken))
+    with caplog.at_level(logging.WARNING, logger="poe_craft_mcp.recipes.loader"):
+        _, data = await call(config, "list_recipes", {})
+    assert "skipping recipe a.yaml" in caplog.text
+    assert data["recipes"] == [] and "1 files skipped" in data["reason"]
+
+
+async def test_missing_recipes_dir_reason_names_path_and_env_var(
+    config: Config, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    missing = tmp_path / "nowhere"
+    monkeypatch.setenv(RECIPES_ENV_VAR, str(missing))
+    _, data = await call(config, "list_recipes", {})
+    assert data["recipes"] == []
+    assert str(missing) in data["reason"] and RECIPES_ENV_VAR in data["reason"]
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    monkeypatch.setenv(RECIPES_ENV_VAR, str(empty))
+    _, data = await call(config, "list_recipes", {})
+    assert str(empty) in data["reason"] and RECIPES_ENV_VAR in data["reason"]
