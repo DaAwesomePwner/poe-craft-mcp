@@ -25,6 +25,7 @@ FIELDS = (
     "total",
     "search_id",
     "sample",
+    "dropped_not_instant_buyout",
     "league",
     "stale",
 )
@@ -48,11 +49,12 @@ def register(server: MCPServer, ctx: AppContext) -> None:
     ) -> dict[str, Any]:
         """Price an item from the pathofexile.com trade site (current poe.ninja league).
 
-        Pass exactly one of `trade_url` (a saved /trade/search or /trade/exchange URL; its
-        league is replaced by the current one) or `query_json` (a trade search body).
-        Uses the `sample` cheapest online listings (1-100, default from config; instant
-        buyout only if the query asks for it), converted to chaos with poe.ninja rates;
-        outliers and unknown currencies are dropped. Returns p10/p25/median in chaos (plus
+        Pass exactly one of `trade_url` (a saved /trade/search URL; its league is replaced
+        by the current one) or `query_json` (a trade search body). Only instant-buyout
+        (asynchronous trade) listings are used, whatever status the search asks for;
+        whisper listings never are, so /trade/exchange URLs are refused. Uses the `sample`
+        cheapest of them (1-100, default from config), converted to chaos with poe.ninja
+        rates; outliers and unknown currencies are dropped. Returns p10/p25/median in chaos (plus
         divine equivalents), counts and the currency mix. `stale: true` means old cached
         listings were served because the trade site is rate limiting.
         """

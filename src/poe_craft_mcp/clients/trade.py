@@ -1,4 +1,9 @@
-"""pathofexile.com trade client: saved URL to query, search, fetch, bulk exchange.
+"""pathofexile.com trade client: saved URL to query, instant-buyout search, fetch.
+
+Every search is restricted to instant-buyout (asynchronous trade) listings, status
+`securable`, whatever status a saved URL or query asks for; fetched listings without the
+async-trade fee are dropped. Bulk exchange URLs are refused: the exchange only lists
+whisper offers.
 
 Every request goes through one `RateLimiter`. Results of `listings_for` are cached per
 query hash and league for `trade_cache_min`; when the limiter refuses, the cached copy is
@@ -18,17 +23,18 @@ from urllib.parse import quote
 import httpx
 
 from poe_craft_mcp.clients.trade_models import (
+    EXCHANGE_REFUSED,
     SearchResult,
     TradeError,
     TradeQuery,
     contains_text,
     decode_search_id,
+    is_instant_buyout,
     normalize_listing,
-    normalize_offer,
     parse_saved_url,
     query_from_body,
     query_hash,
-    with_status,
+    with_instant_buyout,
 )
 from poe_craft_mcp.config import Config
 from poe_craft_mcp.http.cache import CachedResponse, ResponseCache
@@ -54,10 +60,8 @@ __all__ = [
 SEARCH_PATH = "/api/trade/search/{league}"
 SAVED_PATH = "/api/trade/{kind}/{league}/{id}"
 FETCH_PATH = "/api/trade/fetch/{ids}"
-EXCHANGE_PATH = "/api/trade/exchange/{league}"
 FETCH_BATCH = 10
 PRICE_SORT = {"price": "asc"}
-EXCHANGE_SORT = {"have": "asc"}
 COOKIE_ORIGINS = frozenset({("https", "www.pathofexile.com", 443)})
 
 
@@ -152,7 +156,7 @@ class TradeClient:
         self, url: str, *, deadline: float | None = None, cache_only: bool = False
     ) -> TradeQuery:
         """Query JSON behind a saved trade URL. The URL's league is dropped: pass the
-        current league to `search`/`exchange`/`listings_for`. `cache_only` raises
+        current league to `search`/`listings_for`. `cache_only` raises
         `NotCached` instead of requesting an uncached opaque saved search."""
         saved = parse_saved_url(url)
         decoded = decode_search_id(saved.search_id)
@@ -178,14 +182,10 @@ class TradeClient:
         query: dict[str, Any],
         sort: dict[str, Any] | None = None,
         *,
-        online_only: bool = True,
-        instant_buyout: bool = False,
         deadline: float | None = None,
     ) -> SearchResult:
-        body = {
-            "query": with_status(query, online_only=online_only, instant_buyout=instant_buyout),
-            "sort": sort or PRICE_SORT,
-        }
+        """Search instant-buyout listings only; any status in `query` is replaced."""
+        body = {"query": with_instant_buyout(query), "sort": sort or PRICE_SORT}
         path = SEARCH_PATH.format(league=_seg(league))
         data = await self._request("search", "POST", path, body=body, deadline=deadline)
         return SearchResult(
@@ -194,10 +194,11 @@ class TradeClient:
 
     async def fetch(
         self, ids: list[str], search_id: str, *, deadline: float | None = None
-    ) -> list[dict[str, Any]]:
-        """Normalized listings for `ids`, `FETCH_BATCH` per request, all within one deadline."""
+    ) -> tuple[list[dict[str, Any]], int]:
+        """Normalized instant-buyout listings for `ids`, `FETCH_BATCH` per request, all
+        within one deadline, plus the number of listings dropped as not instant buyout."""
         deadline = self.limiter.deadline() if deadline is None else deadline
-        listings = []
+        listings, not_buyout = [], 0
         for start in range(0, len(ids), FETCH_BATCH):
             path = FETCH_PATH.format(ids=",".join(ids[start : start + FETCH_BATCH]))
             data = await self._request(
@@ -205,34 +206,13 @@ class TradeClient:
             )
             for entry in data.get("result") or []:
                 listing = normalize_listing(entry)
-                if listing is not None:
+                if listing is None:
+                    continue
+                if is_instant_buyout(entry):
                     listings.append(listing)
-        return listings
-
-    async def exchange(
-        self,
-        league: str,
-        want: list[str],
-        have: list[str],
-        *,
-        online_only: bool = True,
-        extra: dict[str, Any] | None = None,
-        deadline: float | None = None,
-    ) -> dict[str, Any]:
-        """Bulk exchange offers, cheapest first, each priced per unit of `want`:
-        `{id, total, listings}`. Exchange has no instant-buyout filter."""
-        query = {**(extra or {}), "want": want, "have": have}
-        body = {
-            "query": with_status(query, online_only=online_only, instant_buyout=False),
-            "sort": EXCHANGE_SORT,
-            "engine": "new",
-        }
-        path = EXCHANGE_PATH.format(league=_seg(league))
-        data = await self._request("exchange", "POST", path, body=body, deadline=deadline)
-        results = data.get("result") or {}
-        offers = [normalize_offer(k, v) for k, v in results.items()]
-        listings = sorted((o for o in offers if o), key=lambda o: o["amount"])
-        return {"id": data.get("id"), "total": int(data.get("total") or 0), "listings": listings}
+                else:
+                    not_buyout += 1
+        return listings, not_buyout
 
     async def listings_for(
         self,
@@ -240,33 +220,34 @@ class TradeClient:
         query_or_url: str | dict[str, Any],
         sample: int | None = None,
         *,
-        online_only: bool = True,
-        instant_buyout: bool = False,
         deadline: float | None = None,
         cache_only: bool = False,
     ) -> dict[str, Any]:
-        """The cheapest `sample` listings for a saved URL or query JSON, cached per query.
-        Any saved sort is replaced by price ascending.
+        """The cheapest `sample` instant-buyout listings for a saved /trade/search URL or
+        query JSON, cached per query. Any saved status is replaced by `securable` and any
+        saved sort by price ascending.
 
         `cache_only` never makes a request: it returns any cached copy (marked `stale` once
         older than `trade_cache_min`) or raises `NotCached`.
 
-        Returns `{listings, total, search_id, age_seconds, from_cache, stale}`. Raises
-        `RateLimited` or `TradeError` only when there is no cached copy to fall back on,
-        and `ValueError` for `instant_buyout` on a bulk exchange query. All requests share
-        one deadline: the caller's, else `max_wait_s` from now.
+        Returns `{listings, total, search_id, dropped_not_instant_buyout, age_seconds,
+        from_cache, stale}`. Raises `RateLimited` or `TradeError` only when there is no
+        cached copy to fall back on, and `ValueError` for a bulk exchange URL (whisper-only
+        listings). All requests share one deadline: the caller's, else `max_wait_s` from now.
         """
         deadline = self.limiter.deadline() if deadline is None else deadline
         sample = sample or self.config.trade_sample
+        if isinstance(query_or_url, str) and parse_saved_url(query_or_url).kind == "exchange":
+            raise ValueError(EXCHANGE_REFUSED)
         if isinstance(query_or_url, str):
             tq = await self.resolve_saved_url(
                 query_or_url, deadline=deadline, cache_only=cache_only
             )
         else:
             tq = query_from_body(query_or_url, "search")
-        if tq.kind == "exchange" and instant_buyout:
-            raise ValueError("instant_buyout is not supported for bulk exchange queries")
-        digest = query_hash(tq.kind, tq.query, online_only, instant_buyout, sample)
+        # The key hashes the query as sent (status forced to securable), so entries cached
+        # under the old online-only pricing are never served.
+        digest = query_hash(tq.kind, with_instant_buyout(tq.query), sample)
         key = f"trade://listings/{league}/{digest}"
         cached = await self.cache.get(key)
         fresh = cached is not None and cached.age_seconds < self.config.trade_cache_min * 60
@@ -275,29 +256,21 @@ class TradeClient:
         if cache_only:
             raise NotCached("trade listings are not cached")
         try:
-            if tq.kind == "exchange":
-                want, have = tq.query.get("want") or [], tq.query.get("have") or []
-                ex = await self.exchange(
-                    league, want, have, extra=tq.query, online_only=online_only, deadline=deadline
-                )
-                found = SearchResult(str(ex["id"]), [], ex["total"])
-                listings = ex["listings"][:sample]
-            else:
-                found = await self.search(
-                    league,
-                    tq.query,
-                    PRICE_SORT,
-                    online_only=online_only,
-                    instant_buyout=instant_buyout,
-                    deadline=deadline,
-                )
-                listings = await self.fetch(found.result[:sample], found.id, deadline=deadline)
+            found = await self.search(league, tq.query, PRICE_SORT, deadline=deadline)
+            listings, not_buyout = await self.fetch(
+                found.result[:sample], found.id, deadline=deadline
+            )
         except (RateLimited, TradeError) as exc:
             if cached is None:
                 raise
             log.warning("trade query %s: serving stale cache (%s)", digest, exc)
             return _from_cache(cached, stale=True)
-        payload = {"listings": listings, "total": found.total, "search_id": found.id}
+        payload = {
+            "listings": listings,
+            "total": found.total,
+            "search_id": found.id,
+            "dropped_not_instant_buyout": not_buyout,
+        }
         await self.cache.put(key, json.dumps(payload))
         return {**payload, "age_seconds": 0.0, "from_cache": False, "stale": False}
 

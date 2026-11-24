@@ -2,6 +2,10 @@
 
 Recorded responses live in `tests/fixtures/trade/`. Search ids are gzip-compressed,
 base64url-encoded query JSON (`H4sI...`), so most saved URLs decode without a request.
+
+Pricing uses only instant-buyout (asynchronous trade) listings: every search is sent with
+status `securable`, and a fetched listing counts as instant buyout only when it carries the
+async-trade gold `fee`, which whisper listings never have (checked live, 2026-11-23).
 """
 
 from __future__ import annotations
@@ -24,8 +28,8 @@ SEARCH_ID_RE = re.compile(r"[A-Za-z0-9_=-]+", re.ASCII)
 GZIP_ID_PREFIX = "H4sI"  # base64 of the gzip magic bytes 1f 8b 08
 MAX_SEARCH_ID_LEN = 8192
 MAX_QUERY_BYTES = 64 * 1024
-STATUS_ONLINE = "online"
 STATUS_INSTANT_BUYOUT = "securable"
+EXCHANGE_REFUSED = "exchange listings are whisper-based; use an item search"
 
 
 class TradeError(Exception):
@@ -107,14 +111,10 @@ def query_from_body(body: Any, kind: Kind) -> TradeQuery:
     return TradeQuery(kind, body)
 
 
-def with_status(
-    query: dict[str, Any], *, online_only: bool, instant_buyout: bool
-) -> dict[str, Any]:
+def with_instant_buyout(query: dict[str, Any]) -> dict[str, Any]:
+    """A copy of `query` restricted to instant-buyout listings, whatever status it had."""
     out = json.loads(json.dumps(query))
-    if instant_buyout:
-        out["status"] = {"option": STATUS_INSTANT_BUYOUT}
-    elif online_only:
-        out["status"] = {"option": STATUS_ONLINE}
+    out["status"] = {"option": STATUS_INSTANT_BUYOUT}
     return out
 
 
@@ -134,8 +134,15 @@ def query_hash(*parts: Any) -> str:
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()[:32]
 
 
+def is_instant_buyout(entry: Any) -> bool:
+    """True when a fetch result is an instant-buyout listing (it has the async-trade fee)."""
+    listing = entry.get("listing") if isinstance(entry, dict) else None
+    fee = listing.get("fee") if isinstance(listing, dict) else None
+    return isinstance(fee, int | float) and not isinstance(fee, bool)
+
+
 def normalize_listing(entry: Any) -> dict[str, Any] | None:
-    """One fetch result -> `{id, amount, currency, indexed, account_online, stack_size}`.
+    """One fetch result -> `{id, amount, currency, indexed, stack_size}`.
 
     Returns None for delisted (null) entries and listings without a price. Account and
     character names are dropped.
@@ -147,33 +154,10 @@ def normalize_listing(entry: Any) -> dict[str, Any] | None:
     if price.get("amount") is None or not price.get("currency"):
         return None
     item = entry.get("item") or {}
-    account = listing.get("account") or {}
     return {
         "id": entry.get("id"),
         "amount": float(price["amount"]),
         "currency": price["currency"],
         "indexed": listing.get("indexed"),
-        "account_online": bool(account.get("online")),
         "stack_size": item.get("stackSize"),
-    }
-
-
-def normalize_offer(entry_id: str, entry: Any) -> dict[str, Any] | None:
-    """One bulk-exchange result -> a listing priced per unit of the wanted item."""
-    if not isinstance(entry, dict):
-        return None
-    listing = entry.get("listing") or {}
-    offers = listing.get("offers") or []
-    if not offers:
-        return None
-    pay, get = offers[0].get("exchange") or {}, offers[0].get("item") or {}
-    if not pay.get("amount") or not get.get("amount") or not pay.get("currency"):
-        return None
-    return {
-        "id": entry.get("id") or entry_id,
-        "amount": float(pay["amount"]) / float(get["amount"]),
-        "currency": pay["currency"],
-        "indexed": listing.get("indexed"),
-        "account_online": bool((listing.get("account") or {}).get("online")),
-        "stack_size": get.get("stock"),
     }

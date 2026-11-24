@@ -1,9 +1,9 @@
 """Price one craft outcome from trade-site listings, in chaos.
 
 `price_outcome` is the single entry point for tools (`price_trade_query`) and the craft
-evaluator: it searches the trade site (cheapest online listings, through the shared rate
-limiter and listing cache), converts every price to chaos with poe.ninja currency rates and
-summarizes it with `engine.pricing.summarize`.
+evaluator: it searches the trade site (cheapest instant-buyout listings only, never whisper
+listings, through the shared rate limiter and listing cache), converts every price to chaos
+with poe.ninja currency rates and summarizes it with `engine.pricing.summarize`.
 """
 
 from __future__ import annotations
@@ -16,12 +16,8 @@ from urllib.parse import quote
 
 from poe_craft_mcp.clients.ninja import get_ninja, rates_from
 from poe_craft_mcp.clients.ninja_models import League, NinjaError, divine_chaos
-from poe_craft_mcp.clients.trade import NotCached, RateLimited, TradeClient, TradeError, get_trade
-from poe_craft_mcp.clients.trade_models import (
-    STATUS_INSTANT_BUYOUT,
-    parse_saved_url,
-    query_from_body,
-)
+from poe_craft_mcp.clients.trade import NotCached, RateLimited, TradeError, get_trade
+from poe_craft_mcp.clients.trade_models import EXCHANGE_REFUSED, parse_saved_url
 from poe_craft_mcp.context import AppContext
 from poe_craft_mcp.engine.pricing import summarize
 from poe_craft_mcp.engine.types import Listing, Source
@@ -63,7 +59,8 @@ class OutcomePrice:
     served because upstream failed; `age_seconds` is the age of the listings. `sources` are
     envelope source dicts: the poe.ninja league lookup (omitted when the caller passed
     `league`), poe.ninja Currency rates, the trade search (in that order).
-    `chaos_per_divine` is for display only.
+    `chaos_per_divine` is for display only. Only instant-buyout listings are priced;
+    `dropped_not_instant_buyout` counts fetched listings discarded for lacking it.
     """
 
     p10: float | None
@@ -78,6 +75,7 @@ class OutcomePrice:
     search_id: str
     total: int
     sample: int
+    dropped_not_instant_buyout: int
     league: str
     stale: bool
     age_seconds: float
@@ -109,23 +107,6 @@ def to_listings(raw: list[dict[str, Any]]) -> list[Listing]:
     return listings
 
 
-async def wants_instant_buyout(
-    trade: TradeClient, target: str | dict[str, Any], deadline: float, cache_only: bool = False
-) -> bool:
-    """True when a search query itself filters on instant buyout (`status: securable`), so
-    pricing keeps that filter instead of widening it to every online listing."""
-    if isinstance(target, str):
-        tq = await trade.resolve_saved_url(target, deadline=deadline, cache_only=cache_only)
-    else:
-        tq = query_from_body(target, "search")
-    status = tq.query.get("status")
-    return (
-        tq.kind == "search"
-        and isinstance(status, dict)
-        and status.get("option") == STATUS_INSTANT_BUYOUT
-    )
-
-
 async def price_outcome(
     ctx: AppContext,
     *,
@@ -139,7 +120,8 @@ async def price_outcome(
     """Price the item matched by a saved trade URL or a trade query JSON (exactly one).
 
     `sample` (default `config.trade_sample`, clamped to 1..100) is how many of the cheapest
-    online listings are used (instant-buyout only when the query's status asks for it).
+    instant-buyout listings are used; any status in the URL or query (online, any) is
+    replaced by `securable`, and bulk exchange URLs are refused (whisper-only listings).
     `league` defaults to poe.ninja's current league; a trade URL's own league is ignored.
     `deadline` (on the trade limiter's clock) caps the default 20 s wait so no trade request
     starts after it; `cache_only` serves cached listings without any trade request and
@@ -153,6 +135,8 @@ async def price_outcome(
             target, kind = trade_url, parse_saved_url(trade_url).kind
         except TradeError as exc:
             raise ValueError(str(exc)) from None
+        if kind == "exchange":
+            raise ValueError(EXCHANGE_REFUSED)
     elif query_json is not None and trade_url is None:
         target, kind = query_json, "search"
     else:
@@ -174,14 +158,8 @@ async def price_outcome(
         trade = get_trade(ctx)
         own_limit = trade.limiter.deadline()  # one wait budget for resolving and searching
         wait_until = own_limit if deadline is None else min(own_limit, deadline)
-        instant = await wants_instant_buyout(trade, target, wait_until, cache_only)
         found = await trade.listings_for(
-            resolved.id,
-            target,
-            n,
-            instant_buyout=instant,
-            deadline=wait_until,
-            cache_only=cache_only,
+            resolved.id, target, n, deadline=wait_until, cache_only=cache_only
         )
     except NotCached as exc:
         raise QuoteNotCached(f"trade site: {exc}") from None
@@ -208,7 +186,7 @@ async def price_outcome(
         search_id=search_id,
         league=resolved.id,
         from_cache=found["from_cache"],
-        instant_buyout=instant,
+        instant_buyout=True,
     )
     ninja_sources = currency.sources() if league is None else [currency.source()]
     sources = [*ninja_sources, trade_source]
@@ -217,6 +195,7 @@ async def price_outcome(
         search_id=search_id,
         total=int(found["total"]),
         sample=n,
+        dropped_not_instant_buyout=int(found.get("dropped_not_instant_buyout") or 0),
         league=resolved.id,
         stale=any(s.get("stale") for s in sources),
         age_seconds=float(found["age_seconds"]),

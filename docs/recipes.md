@@ -124,12 +124,18 @@ Each outcome has exactly one of `trade_url` (priced from live listings), `fixed_
 and a recipe with no `trade_url` sale (or whose sale price you override) is evaluated but not ranked.
 Value uses the 25th percentile of the listings minus the configured undercut.
 
+Only instant-buyout (asynchronous trade) listings count, for prices and for liquidity:
+`min_listings` is the number of instant-buyout listings an outcome needs to be ranked.
+Whisper listings are never used.
+
 ## Trade URLs
 
 Build the search for the *finished* item on pathofexile.com/trade, run it and copy the URL
-(`.../trade/search/<league>/<id>`, or `.../trade/exchange/...`). Paste it **unchanged**: the
-server needs the original league to look up a saved search, then swaps in the current league
-when it runs it. Keep the filters tight enough that the cheapest listings
+(`.../trade/search/<league>/<id>`). Paste it **unchanged**: the server needs the original
+league to look up a saved search, then swaps in the current league when it runs it. Whatever
+status the search was saved with (online, any), it is run as instant buyout only (`securable`).
+Bulk exchange URLs (`.../trade/exchange/...`) are refused: the exchange lists only whisper
+offers. Keep the filters tight enough that the cheapest listings
 are the item you would really sell. A URL containing `<` (placeholder) cannot be priced, and
 the recipe carries a warning until you replace it.
 

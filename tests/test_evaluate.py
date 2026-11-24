@@ -9,6 +9,7 @@ Imperial Bow ilvl >= 85 2.2c, Orb of Alteration 0.2118c, every trade outcome p25
 from __future__ import annotations
 
 import asyncio
+import json
 import math
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -16,7 +17,7 @@ from typing import TYPE_CHECKING, Any
 import httpx
 import pytest
 from test_ninja import NinjaApi, api, ctx, load
-from test_trade import SAVED_URL, recorded
+from test_trade import SAVED_URL, blob, recorded
 from test_trade_pricing import TRADE, fetch_body, mock_trade, trade
 
 from poe_craft_mcp.clients.ninja import get_ninja
@@ -85,6 +86,27 @@ async def test_full_recipe_matches_hand_calculation(
     assert (hit.chaos, hit.listing_count) == (5.0, 30)
     assert hit.source["name"] == "pathofexile.com trade" and hit.source["search_id"]
     assert [o.is_failure for o in b.outcomes] == [False, True]
+
+
+async def test_recipe_trade_inputs_use_instant_buyout_only(
+    ctx: AppContext, api: NinjaApi, trade: TradeClient
+) -> None:
+    search, _ = mock_trade(api)
+    pricer = Pricer(ctx)
+    for kind, status in (("base", "any"), ("outcome", "online"), ("salvage", None)):
+        query: dict[str, Any] = {"type": f"{kind} item"}
+        if status:
+            query["status"] = {"option": status}
+        url = f"{TRADE}/trade/search/Settlers/{blob(json.dumps({'query': query}).encode())}"
+        priced = await pricer.trade(kind, kind, url)
+        sent = json.loads(search.calls.last.request.content)
+        assert sent["query"] == {"type": f"{kind} item", "status": {"option": "securable"}}
+        assert priced.status == "ok" and priced.source["instant_buyout"] is True
+    exchange = f"{TRADE}/trade/exchange/Covens/Ab12Cd"
+    refused = await pricer.trade("outcome", "bulk", exchange)
+    assert (refused.status, refused.chaos) == ("error", None)
+    assert refused.error == "bad trade URL: exchange listings are whisper-based; use an item search"
+    assert search.call_count == 3
 
 
 async def test_overrides_replace_prices_and_skip_lookups(
