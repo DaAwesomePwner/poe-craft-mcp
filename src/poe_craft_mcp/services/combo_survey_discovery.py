@@ -17,6 +17,7 @@ from poe_craft_mcp.clients.trade import NotCached, RateLimited, TradeError, get_
 from poe_craft_mcp.context import AppContext
 from poe_craft_mcp.engine.types import Source
 from poe_craft_mcp.envelope import source
+from poe_craft_mcp.http.ratelimit import RateLimiter
 from poe_craft_mcp.services.combo_discovery import Discovery, classify, tally
 from poe_craft_mcp.services.combo_queries import discovery_query
 
@@ -54,6 +55,15 @@ def _source(ctx: AppContext, league: str, found: Mapping[str, Any]) -> Source:
         from_cache=found["from_cache"],
         instant_buyout=True,
     )
+
+
+def limiter_wait(limiter: RateLimiter) -> float | None:
+    """The longest wait the limiter now imposes on any request kind (search, fetch or any
+    other it knows), or None when it reports none: a stale copy can come from a refused
+    search or a refused fetch."""
+    kinds = {"search", "fetch", *limiter.kind_policy}
+    wait = max(limiter.wait_for(kind) for kind in sorted(kinds))
+    return wait if wait > 0 else None
 
 
 def _rate_limit_stop(exc: RateLimited, now: float, own_limit: float, wait_until: float) -> Stop:
@@ -107,7 +117,9 @@ async def survey_discovery(
         if found["stale"]:
             if cache_only:
                 return None
-            return Stop(STALE_STOP, trade.limiter.wait_for("search"))
+            wait = limiter_wait(trade.limiter)
+            hint = "retry hint unavailable" if wait is None else f"retry in about {wait:.0f}s"
+            return Stop(f"{STALE_STOP}; {hint}", wait)
         mods = plan.split.mod_by_trade
         listings, total = found["listings"], int(found["total"])
         tallies.append(tally(listings, rates, mods, total, plan.excluded, **bound))
