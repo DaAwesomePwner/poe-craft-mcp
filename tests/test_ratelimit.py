@@ -3,14 +3,20 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+from collections.abc import Iterator
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 import httpx
 import pytest
 
-from poe_craft_mcp.http.ratelimit import RateLimited, RateLimiter, parse_triples
-from poe_craft_mcp.log import add_file_log
+from poe_craft_mcp.http.ratelimit import (
+    RateLimited,
+    RateLimiter,
+    parse_triples,
+    retry_after_seconds,
+    setup_state_log,
+)
 
 if TYPE_CHECKING:
     from conftest import FakeClock
@@ -195,16 +201,77 @@ async def test_waiters_get_rate_limited_when_a_429_lands(limiter: RateLimiter) -
     assert sent == ["first"]
 
 
-async def test_state_updates_are_logged_to_file(limiter: RateLimiter, tmp_path: Path) -> None:
+@pytest.fixture
+def state_logger(tmp_path: Path) -> Iterator[Path]:
     path = tmp_path / "logs" / "ratelimit.log"
-    logger = add_file_log("poe_craft_mcp.ratelimit", path)
-    logger.setLevel(logging.INFO)
-    try:
-        await limiter.run("search", reply(200, SEARCH_HEADERS))
-    finally:
-        for handler in list(logger.handlers):
-            logger.removeHandler(handler)
-            handler.close()
-        logger.setLevel(logging.NOTSET)
-    text = path.read_text(encoding="utf-8")
+    logger = setup_state_log(path)
+    yield path
+    for handler in list(logger.handlers):
+        logger.removeHandler(handler)
+        handler.close()
+    logger.setLevel(logging.NOTSET)
+    logger.propagate = True
+
+
+async def test_state_logged_to_file_at_any_level_without_stderr_echo(
+    limiter: RateLimiter, state_logger: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    caplog.set_level(logging.WARNING)
+    await limiter.run("search", reply(200, SEARCH_HEADERS))
+    text = state_logger.read_text(encoding="utf-8")
     assert "trade-search-request-limit" in text and "151:21600:0" in text
+    assert "151:21600:0" not in caplog.text
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        ("12", 12.0),
+        ("1.5", 1.5),
+        ("NaN", 60.0),
+        ("inf", 60.0),
+        ("-5", 60.0),
+        ("garbage", 60.0),
+        (None, 60.0),
+        ("99999", 3600.0),
+        ("Tue, 14 Nov 2023 22:13:50 GMT", 30.0),
+    ],
+)
+def test_retry_after_parsing_is_strict_and_clamped(value: str | None, expected: float) -> None:
+    now = 1_700_000_000.0  # 2023-11-14T22:13:20Z
+    headers = httpx.Headers({} if value is None else {"Retry-After": value})
+    assert retry_after_seconds(headers, now) == pytest.approx(expected)
+
+
+async def test_nan_retry_after_still_pauses(limiter: RateLimiter, clock: FakeClock) -> None:
+    with pytest.raises(RateLimited) as err:
+        await limiter.run("search", reply(429, {"Retry-After": "NaN"}))
+    assert err.value.retry_after == pytest.approx(66.0)
+    assert limiter.state()["paused_until"] == pytest.approx(clock() + 66.0)
+
+
+async def test_lock_wait_counts_against_deadline(limiter: RateLimiter, clock: FakeClock) -> None:
+    release = asyncio.Event()
+
+    async def slow() -> httpx.Response:
+        await release.wait()
+        return httpx.Response(200)
+
+    holder = asyncio.create_task(limiter.run("search", slow))
+    await asyncio.sleep(0)
+    with pytest.raises(RateLimited, match="queue busy"):
+        await limiter.run("fetch", reply(), deadline=clock() + 0.05)
+    release.set()
+    await holder
+
+
+async def test_unlearned_kind_honours_restriction_seen_elsewhere(limiter: RateLimiter) -> None:
+    restricted = {
+        **SEARCH_HEADERS,
+        "X-Rate-Limit-Ip-State": "6:10:60,1:60:0,2:300:0,151:21600:0",
+    }
+    await limiter.run("search", reply(200, restricted))
+    with pytest.raises(RateLimited):
+        await limiter.run("exchange", reply())
+    # search waits out its own restriction.
+    assert limiter.wait_for("search") == pytest.approx(60.0)

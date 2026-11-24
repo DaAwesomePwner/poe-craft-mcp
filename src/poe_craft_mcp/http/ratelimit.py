@@ -8,15 +8,22 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import math
+import re
 import time
 from collections import deque
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass, field
+from email.utils import parsedate_to_datetime
+from pathlib import Path
 from typing import Any
 
 import httpx
 
-log = logging.getLogger("poe_craft_mcp.ratelimit")
+from poe_craft_mcp.log import add_file_log
+
+log = logging.getLogger(__name__)
+state_log = logging.getLogger("poe_craft_mcp.ratelimit")
 
 Sleep = Callable[[float], Awaitable[None]]
 DEFAULT_KIND_POLICY = {"search": "search", "exchange": "search", "fetch": "fetch"}
@@ -24,6 +31,8 @@ BOOTSTRAP_INTERVAL_S = 2.0
 MAX_WAIT_S = 20.0
 PAUSE_FACTOR = 1.1
 DEFAULT_RETRY_AFTER_S = 60.0
+MAX_RETRY_AFTER_S = 3600.0
+_SECONDS_RE = re.compile(r"\d+(\.\d+)?", re.ASCII)
 
 
 class RateLimited(Exception):
@@ -124,11 +133,33 @@ class Policy:
         return {"rules": rules, "restricted_until": self.restricted_until or None}
 
 
-def retry_after_seconds(headers: Mapping[str, str]) -> float:
-    try:
-        return max(0.0, float(headers.get("retry-after", "")))
-    except ValueError:
+def retry_after_seconds(headers: Mapping[str, str], now: float) -> float:
+    """Seconds from `Retry-After` (delta seconds or HTTP-date), clamped to
+    [0, MAX_RETRY_AFTER_S]; missing or invalid values give `DEFAULT_RETRY_AFTER_S`."""
+    raw = headers.get("retry-after", "").strip()
+    seconds: float | None = None
+    if _SECONDS_RE.fullmatch(raw):
+        seconds = float(raw)
+    elif raw:
+        try:
+            seconds = parsedate_to_datetime(raw).timestamp() - now
+        except (TypeError, ValueError, IndexError, OverflowError):
+            seconds = None
+    if seconds is None or not math.isfinite(seconds):
+        log.warning("invalid or missing Retry-After %r; using %.0fs", raw, DEFAULT_RETRY_AFTER_S)
         return DEFAULT_RETRY_AFTER_S
+    if seconds > MAX_RETRY_AFTER_S:
+        log.warning("Retry-After %r clamped to %.0fs", raw, MAX_RETRY_AFTER_S)
+    return min(max(0.0, seconds), MAX_RETRY_AFTER_S)
+
+
+def setup_state_log(path: Path) -> logging.Logger:
+    """Write every limiter state update to `path` at INFO whatever the main log level,
+    without echoing those lines to stderr or server.log."""
+    logger = add_file_log(state_log.name, path)
+    logger.setLevel(logging.INFO)
+    logger.propagate = False
+    return logger
 
 
 class RateLimiter:
@@ -152,6 +183,7 @@ class RateLimiter:
         self.kind_policy = dict(DEFAULT_KIND_POLICY)
         self.policies: dict[str, Policy] = {}
         self.paused_until = 0.0
+        self._learned: set[str] = set()
         self._pause_epoch = 0
         self._lock = asyncio.Lock()
 
@@ -159,17 +191,38 @@ class RateLimiter:
         name = self.kind_policy.setdefault(kind, kind)
         return self.policies.setdefault(name, Policy())
 
+    def deadline(self) -> float:
+        """An absolute deadline `max_wait_s` from now, to share across one operation's calls."""
+        return self.clock() + self.max_wait_s
+
     def wait_for(self, kind: str) -> float:
         now = self.clock()
-        return max(self.paused_until - now, self._policy(kind).wait(now, self.bootstrap_s), 0.0)
+        waits = [self.paused_until - now, self._policy(kind).wait(now, self.bootstrap_s)]
+        if kind not in self._learned:
+            # Its own policy is unknown yet: it may share any restriction seen elsewhere.
+            waits += [p.restricted_until - now for p in self.policies.values()]
+        return max(0.0, *waits)
 
-    async def run(self, kind: str, send: Callable[[], Awaitable[httpx.Response]]) -> httpx.Response:
-        """Wait for room under `kind`'s policy, then send. Raises `RateLimited` instead of
-        waiting past `max_wait_s` (queue time included), on 429, or when a 429 hit the queue
-        while this call was waiting."""
-        deadline = self.clock() + self.max_wait_s
+    async def run(
+        self,
+        kind: str,
+        send: Callable[[], Awaitable[httpx.Response]],
+        *,
+        deadline: float | None = None,
+    ) -> httpx.Response:
+        """Wait for room under `kind`'s policy, then send.
+
+        Raises `RateLimited` instead of waiting (for the queue or for the limits) past
+        `deadline` (default `max_wait_s` from now), on 429, or when a 429 hit the queue
+        while this call was waiting.
+        """
+        deadline = self.deadline() if deadline is None else deadline
         epoch = self._pause_epoch
-        async with self._lock:
+        try:
+            await asyncio.wait_for(self._lock.acquire(), max(0.0, deadline - self.clock()))
+        except TimeoutError:
+            raise RateLimited(self.wait_for(kind), "trade queue busy past deadline") from None
+        try:
             if self._pause_epoch != epoch:
                 raise RateLimited(self.wait_for(kind), "queue paused by a 429")
             wait = self.wait_for(kind)
@@ -181,22 +234,27 @@ class RateLimiter:
             response = await send()
             self._observe(kind, response)
             if response.status_code == 429:
-                pause = retry_after_seconds(response.headers) * PAUSE_FACTOR
-                self.paused_until = max(self.paused_until, self.clock() + pause)
+                now = self.clock()
+                pause = retry_after_seconds(response.headers, now) * PAUSE_FACTOR
+                self.paused_until = max(self.paused_until, now + pause)
                 self._pause_epoch += 1
                 log.warning("429 on %s: pausing trade queue for %.1fs", kind, pause)
                 raise RateLimited(pause, "HTTP 429")
             return response
+        finally:
+            self._lock.release()
 
     def _observe(self, kind: str, response: httpx.Response) -> None:
         headers = response.headers
         name = headers.get("x-rate-limit-policy")
-        if name and self.kind_policy.get(kind) != name:
-            self.kind_policy[kind] = name
-            self.policies.setdefault(name, Policy())
+        if name:
+            self._learned.add(kind)
+            if self.kind_policy.get(kind) != name:
+                self.kind_policy[kind] = name
+                self.policies.setdefault(name, Policy())
         if "x-rate-limit-rules" in headers:
             self._policy(kind).update(headers, self.clock())
-        log.info(
+        state_log.info(
             "%s %s policy=%s rules=%s %s",
             kind,
             response.status_code,

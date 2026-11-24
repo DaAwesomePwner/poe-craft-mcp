@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import base64
 import binascii
-import gzip
 import hashlib
 import json
 import re
@@ -21,6 +20,10 @@ from poe_craft_mcp.log import mask_secrets
 
 Kind = Literal["search", "exchange"]
 SAVED_URL_RE = re.compile(r"^/trade/(search|exchange)/([^/]+)/([^/]+)/?$")
+SEARCH_ID_RE = re.compile(r"[A-Za-z0-9_=-]+", re.ASCII)
+GZIP_ID_PREFIX = "H4sI"  # base64 of the gzip magic bytes 1f 8b 08
+MAX_SEARCH_ID_LEN = 8192
+MAX_QUERY_BYTES = 64 * 1024
 STATUS_ONLINE = "online"
 STATUS_INSTANT_BUYOUT = "securable"
 
@@ -65,17 +68,33 @@ def parse_saved_url(url: str) -> SavedSearch:
     if parts.scheme not in ("http", "https") or match is None:
         raise TradeError("not a pathofexile.com/trade/search or /trade/exchange URL")
     kind, league, search_id = match.groups()
-    return SavedSearch(kind, unquote(league), unquote(search_id))  # type: ignore[arg-type]
+    search_id = unquote(search_id)
+    if len(search_id) > MAX_SEARCH_ID_LEN or not SEARCH_ID_RE.fullmatch(search_id):
+        raise TradeError("trade URL has a malformed or oversized search id")
+    return SavedSearch(kind, unquote(league), search_id)  # type: ignore[arg-type]
 
 
 def decode_search_id(search_id: str) -> dict[str, Any] | None:
-    """The query JSON embedded in a gzip+base64url id, or None for an opaque id."""
-    try:
-        raw = gzip.decompress(base64.urlsafe_b64decode(search_id + "=" * (-len(search_id) % 4)))
-        data = json.loads(raw)
-    except (binascii.Error, OSError, EOFError, ValueError, zlib.error):
+    """The query JSON embedded in a gzip+base64url id, or None for an opaque id.
+
+    Input and decompressed sizes are bounded, so a crafted id cannot exhaust memory.
+    """
+    if not search_id.startswith(GZIP_ID_PREFIX):
         return None
-    return data if isinstance(data, dict) else None
+    if len(search_id) > MAX_SEARCH_ID_LEN:
+        raise TradeError("saved search id is too long")
+    try:
+        packed = base64.urlsafe_b64decode(search_id + "=" * (-len(search_id) % 4))
+        inflater = zlib.decompressobj(wbits=31)
+        raw = inflater.decompress(packed, MAX_QUERY_BYTES)
+        if inflater.unconsumed_tail or not inflater.eof:
+            raise TradeError("saved search query is too large or truncated")
+        data = json.loads(raw)
+    except (binascii.Error, ValueError, zlib.error):
+        raise TradeError("saved search id is not a valid compressed query") from None
+    if not isinstance(data, dict):
+        raise TradeError("saved search query is not a JSON object")
+    return data
 
 
 def query_from_body(body: Any, kind: Kind) -> TradeQuery:

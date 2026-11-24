@@ -58,13 +58,24 @@ def poesessid_set() -> bool:
     return get_poesessid() is not None
 
 
+class KeychainError(Exception):
+    """The keychain rejected an operation. The message names only the failure type."""
+
+
 def set_poesessid(value: str) -> None:
-    """Store the value in the OS keychain. Raises `ValueError` for an empty value."""
+    """Store the value in the OS keychain.
+
+    Raises `ValueError` for an empty value and `KeychainError` (never quoting the value,
+    whatever the backend said) when the keychain fails.
+    """
     value = _clean(value) or ""
     if not value:
         raise ValueError("POESESSID is empty")
     register_secret(value)
-    keyring.set_password(SERVICE, USERNAME, value)
+    try:
+        keyring.set_password(SERVICE, USERNAME, value)
+    except Exception as exc:
+        raise KeychainError(type(exc).__name__) from None
 
 
 def clear_poesessid() -> bool:
@@ -82,20 +93,22 @@ def main(argv: list[str] | None = None) -> int:
     action = parser.parse_args(argv).action
     try:
         if action == "set":
-            set_poesessid(getpass.getpass("POESESSID (input hidden): "))
+            value = _clean(getpass.getpass("POESESSID (input hidden): "))
+            if value is None:
+                print("error: POESESSID is empty", file=sys.stderr)
+                return 1
+            register_secret(value)
+            set_poesessid(value)
             print("POESESSID stored in the OS keychain.")
         elif action == "clear":
             print("POESESSID removed." if clear_poesessid() else "No POESESSID in the keychain.")
         else:
             _, source = _lookup()
             print(f"POESESSID: set ({source})" if source else "POESESSID: not set")
-    except ValueError as exc:
-        print(f"error: {exc}", file=sys.stderr)
-        return 1
-    except Exception as exc:  # keyring failures: report the type only, never the value
+    except Exception as exc:  # report the type only: backend messages may quote the value
+        name = str(exc) if isinstance(exc, KeychainError) else type(exc).__name__
         print(
-            f"error: keychain unavailable ({type(exc).__name__}); "
-            f"set the {ENV_VAR} environment variable instead",
+            f"error: keychain unavailable ({name}); set the {ENV_VAR} environment variable instead",
             file=sys.stderr,
         )
         return 1

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import base64
+import gzip
 import json
 import logging
 from collections.abc import AsyncIterator
@@ -216,6 +218,8 @@ async def test_poesessid_sent_as_cookie_but_never_leaks(
             for handler in list(logger.handlers):
                 logger.removeHandler(handler)
                 handler.close()
+            logger.setLevel(logging.NOTSET)
+            logger.propagate = True
     for call in [*search.calls, *fetch.calls]:
         assert call.request.headers["Cookie"] == f"POESESSID={SECRET}"
         assert call.request.headers["User-Agent"] == config.user_agent
@@ -227,3 +231,114 @@ async def test_poesessid_sent_as_cookie_but_never_leaks(
     assert all(SECRET not in text for text in leaks)
     assert (config.logs_dir / "ratelimit.log").exists()
     assert SECRET not in (config.logs_dir / "ratelimit.log").read_text(encoding="utf-8")
+
+
+def make_client(config: Config, cache: ResponseCache, clock: FakeClock) -> TradeClient:
+    limiter = RateLimiter(clock=clock, sleep=FakeSleep(clock))
+    return TradeClient(config, cache, limiter=limiter, poesessid=lambda: SECRET)
+
+
+def blob(payload: bytes) -> str:
+    return base64.urlsafe_b64encode(gzip.compress(payload)).decode().rstrip("=")
+
+
+@pytest.mark.parametrize("base_url", ["http://www.pathofexile.com", "https://trade.example.test"])
+@respx.mock
+async def test_cookie_only_sent_to_official_https_origin(
+    base_url: str, tmp_path: Path, cache: ResponseCache, clock: FakeClock
+) -> None:
+    config = Config(data_dir=tmp_path / "data", trade_base_url=base_url)
+    trade = make_client(config, cache, clock)
+    route = respx.post(f"{base_url}/api/trade/search/Covens").mock(return_value=recorded("search"))
+    await trade.search("Covens", {"type": "Simple Robe"})
+    assert "Cookie" not in route.calls.last.request.headers
+    await trade.aclose()
+
+
+@respx.mock
+async def test_redirects_are_not_followed(
+    config: Config, cache: ResponseCache, clock: FakeClock
+) -> None:
+    trade = make_client(config, cache, clock)
+    respx.post(f"{BASE}/api/trade/search/Covens").respond(
+        302, headers={"Location": "https://elsewhere.example.test/steal"}
+    )
+    elsewhere = respx.route(host="elsewhere.example.test").respond(200, json={})
+    with pytest.raises(TradeError, match="redirect refused"):
+        await trade.search("Covens", {"type": "Simple Robe"})
+    assert not elsewhere.called
+    await trade.aclose()
+
+
+@respx.mock
+async def test_echoed_cookie_is_never_cached_or_returned(
+    config: Config, cache: ResponseCache, clock: FakeClock
+) -> None:
+    trade = make_client(config, cache, clock)
+    route = respx.post(f"{BASE}/api/trade/search/Covens")
+    route.respond(200, json={"id": f"x{SECRET}", "result": [], "total": 0})
+    with pytest.raises(TradeError) as err:
+        await trade.listings_for("Covens", SAVED_URL, sample=10)
+    assert SECRET not in str(err.value) + repr(err.value)
+    route.respond(200, json={"id": "clean", "result": [], "total": 0})
+    result = await trade.listings_for("Covens", SAVED_URL, sample=10)
+    assert (result["from_cache"], result["search_id"]) == (False, "clean")
+    await trade.aclose()
+
+
+def test_decompression_bomb_and_oversized_ids_rejected() -> None:
+    bomb = blob(b'{"a":"' + b"x" * 5_000_000 + b'"}')
+    assert len(bomb) < 8192
+    with pytest.raises(TradeError, match="too large"):
+        decode_search_id(bomb)
+    with pytest.raises(TradeError):
+        parse_saved_url(f"{BASE}/trade/search/Covens/H4sI{'A' * 9000}")
+    with pytest.raises(TradeError):
+        decode_search_id("H4sI" + "A" * 9000)
+    with pytest.raises(TradeError):
+        decode_search_id(blob(b"[1, 2]"))
+
+
+@respx.mock
+async def test_one_deadline_covers_all_fetch_batches(trade: TradeClient, clock: FakeClock) -> None:
+    respx.post(f"{BASE}/api/trade/search/Covens").mock(return_value=recorded("search"))
+    slow = {
+        "X-Rate-Limit-Policy": "trade-fetch-request-limit",
+        "X-Rate-Limit-Rules": "Ip",
+        "X-Rate-Limit-Ip": "2:12:60",
+        "X-Rate-Limit-Ip-State": "1:12:0",
+    }
+    fetch = respx.get(url__startswith=f"{BASE}/api/trade/fetch/").respond(
+        200, json=fixture("fetch")["body"], headers=slow
+    )
+    start = clock()
+    with pytest.raises(RateLimited):
+        await trade.listings_for("Covens", SAVED_URL, sample=25)
+    assert fetch.call_count == 2
+    assert clock() - start <= 20
+
+
+@respx.mock
+async def test_saved_descending_sort_is_forced_ascending(trade: TradeClient) -> None:
+    search, _ = mock_search_and_fetch()
+    body = {"id": "Ab12Cd", "query": {"type": "Simple Robe"}, "sort": {"price": "desc"}}
+    respx.get(f"{BASE}/api/trade/search/Covens/Ab12Cd").respond(200, json=body)
+    await trade.listings_for("Covens", f"{BASE}/trade/search/Covens/Ab12Cd", sample=10)
+    assert json.loads(search.calls.last.request.content)["sort"] == {"price": "asc"}
+    await trade.listings_for("Covens", {**body, "query": {"type": "Silk Robe"}}, sample=10)
+    assert json.loads(search.calls.last.request.content)["sort"] == {"price": "asc"}
+
+
+@respx.mock
+async def test_exchange_url_prices_bulk_and_rejects_instant_buyout(trade: TradeClient) -> None:
+    query = {"status": {"option": "online"}, "have": ["chaos"], "want": ["divine"]}
+    url = f"{BASE}/trade/exchange/Covens/{blob(json.dumps(query).encode())}"
+    route = respx.post(f"{BASE}/api/trade/exchange/Covens").mock(return_value=recorded("exchange"))
+    with pytest.raises(ValueError, match="instant_buyout"):
+        await trade.listings_for("Covens", url, instant_buyout=True)
+    assert not route.called
+    result = await trade.listings_for("Covens", url, sample=3)
+    sent = json.loads(route.calls.last.request.content)
+    assert (sent["query"]["want"], sent["query"]["have"]) == (["divine"], ["chaos"])
+    assert sent["sort"] == {"have": "asc"}
+    assert len(result["listings"]) == 3 and result["total"] == 9

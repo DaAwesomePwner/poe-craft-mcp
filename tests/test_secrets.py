@@ -115,3 +115,29 @@ def test_cli_set_without_backend_fails_cleanly(
     assert "environment variable" in err and SECRET not in err
     monkeypatch.setattr(secrets.getpass, "getpass", lambda prompt: "   ")
     assert secrets.main(["set"]) == 1
+
+
+class EchoingKeyring(MemoryKeyring):
+    def set_password(self, service: str, username: str, password: str) -> None:
+        raise ValueError(f"backend rejected {password!r}")
+
+
+def test_cli_set_never_prints_backend_error_text(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    previous = keyring.get_keyring()
+    keyring.set_keyring(EchoingKeyring())
+    try:
+        monkeypatch.setattr(secrets.getpass, "getpass", lambda prompt: SECRET)
+        assert secrets.main(["set"]) == 1
+        with pytest.raises(secrets.KeychainError) as err:
+            secrets.set_poesessid(SECRET)
+    finally:
+        keyring.set_keyring(previous)
+    out = capsys.readouterr()
+    assert "ValueError" in out.err
+    assert SECRET not in out.out + out.err + str(err.value) + repr(err.value)
+    logging.getLogger("x").error("after failure: %s", SECRET)
+    assert SECRET not in caplog.text
