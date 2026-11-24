@@ -120,6 +120,7 @@ This product isn't affiliated with or endorsed by Grinding Gear Games in any way
 - "What's the price of a 2-link Astral Plate base, ilvl 84+?"
 - "Price this trade search: `<trade URL>`"
 - "What's my chance per attempt of rolling `<mod id>` on a Vaal Regalia at ilvl 84 with chaos orbs?"
+- "Which Medium Cluster Jewel enchant with 4 passives has the most notable pairs worth 1 divine?"
 
 **What to expect on a fresh clone.** `recipes/` holds two kinds of files, all `unverified`, so
 rankings and `list_recipes` hide them by default:
@@ -172,9 +173,56 @@ of attempts) still fits your budget.
 | `get_recipe(id)` | One full recipe with its warnings | none |
 | `price_trade_query(trade_url? \| query_json?, sample?)` | p10 / p25 / median in chaos of the cheapest instant-buyout listings of a trade search | trade site (cached 20 min, rate limited) |
 | `mod_odds(base, ilvl, target_mods, method)` | Chance per attempt for chaos, alt, essence or fossil crafting, from RePoE spawn weights, plus attempts for a 90% chance | none (needs game data) |
+| `cluster_combo_survey(base, passives, ilvl, min_value_div=1, ...)` | Ranks the current, searchable enchants of a Medium or Large Cluster Jewel by the chance per attempt of landing a notable pair that looks worth at least `min_value_div` divines, then by how many such pairs there are. Discovery searches only, so values are provisional; see [Finding sellable cluster combos](#finding-sellable-cluster-combos) | poe.ninja and trade, 2 searches per enchant (cached 20 min; call again to continue) |
+| `cluster_combos(base, enchant, passives, ilvl, min_value_div=1, ...)` | For one enchant: confirms candidate notable pairs worth at least `min_value_div` divines with exact instant-buyout searches (up to `max_pair_searches` live searches per call; call again for the rest), then, for the pairs confirmed so far, the chance, expected value, cost and profit per attempt and per hour of Alteration/Augmentation until a notable of a sellable pair shows, then Regal | poe.ninja and trade (needs game data) |
 | `evaluate_recipe(id, price_overrides?)` | Full cost / value / profit breakdown of one recipe, with every input's source and age | poe.ninja and trade |
 | `rank_crafts(budget_div, min_listings?, max_minutes?, risk="medium", limit=5, include_unverified?, tags?)` | Ranks recipes by profit per hour within a budget | poe.ninja and trade |
 | `refresh` | Only when you ask: reload poe.ninja data now instead of waiting out the 15-minute floor. Once per 5 minutes; never touches the trade site | poe.ninja |
+
+## Finding sellable cluster combos
+
+A rare Medium or Large Cluster Jewel with the right two notables can sell for divines, but most
+pairs sell for little. Two tools find the pairs worth crafting for:
+
+1. **Survey the enchants.** Ask for `cluster_combo_survey` with the base (Medium or Large), your
+   passive count and item level, e.g. "Which Medium Cluster Jewel enchant with 4 passives has
+   the most notable pairs worth 1 divine?" It ranks the base's current enchants that the trade
+   site can search for by the chance per attempt of landing a provisionally sellable pair, then
+   by how many such pairs there are, and lists the skipped enchants with reasons.
+2. **Confirm the top few.** Run `cluster_combos` on the best enchants. It prices candidate pairs
+   with their exact trade searches, most likely first: cached searches are free, then up to
+   `max_pair_searches` (12) live searches per call; the rest are listed as unconfirmed and
+   calling again continues. It adds the miss value, white base, orb costs and profit per hour
+   for the pairs confirmed so far.
+3. **Craft** the enchant with the best confirmed profit per hour.
+
+- **Sellable** means the 25th percentile of a pair's instant-buyout listings from its exact
+  search, less the 5% undercut, is at least `min_value_div` divines, with at least
+  `min_listings` listings. In discovery, a pair with `min_listings` or more listings priced
+  strictly below that threshold is not sellable.
+- **The craft priced** is the anchor strategy: Transmutation, then Alteration (and Augmentation)
+  until the magic jewel shows an anchor (a notable of any sellable pair), then one Regal Orb.
+  The rare is a hit when it holds a sellable pair. More sellable pairs do not always mean
+  better odds: a pair between notables you already chase adds no anchor, only more rares that
+  count as hits, and a new anchor that rarely completes a pair can lower the chance per
+  attempt. Compare the chance and the profit, not the pair count.
+- **Provisional vs confirmed.** The survey only runs two broad discovery searches per enchant
+  and values each candidate pair from one of those listings (the `min_listings`-th cheapest at
+  or above the threshold, less the undercut). A candidate pair (fewer than `min_listings`
+  listings below the threshold and at least one at or above it) enters the chance per attempt
+  only when it has at least `min_listings` listings at or above the threshold and that value is
+  still at least the threshold; a candidate with fewer listings there is a thin candidate:
+  counted, but left out of the chance per attempt. The survey is cheap and good for ranking,
+  but it confirms nothing. `cluster_combos` confirms pairs with exact searches that exclude
+  every other notable, and only its numbers should decide a craft.
+- **Rate limits.** The trade site allows roughly 30 searches per 5 minutes, so a cold survey of
+  every Medium enchant (2 searches each) takes several minutes. The survey uses cached results
+  first, read straight from the cache, then searches live until `max_seconds` (90 by default),
+  a rate limit or a stale reply, and lists the rest as `pending` with the retry hint. Call it again with the same inputs to continue: results are cached for 20
+  minutes (`trade_cache_min`).
+
+The model, its odds derivation and its known approximations are in
+[docs/cluster-combos.md](docs/cluster-combos.md).
 
 ## Writing recipes
 

@@ -24,6 +24,7 @@ import httpx
 
 from poe_craft_mcp.clients.trade_models import (
     EXCHANGE_REFUSED,
+    LISTINGS_VERSION,
     SearchResult,
     TradeError,
     TradeQuery,
@@ -252,9 +253,10 @@ class TradeClient:
         else:
             tq = query_from_body(query_or_url, "search")
         # The key hashes the query as sent (status forced to securable), so entries cached
-        # under the old online-only pricing are never served.
+        # under the old online-only pricing are never served; the payload version keeps
+        # entries without `explicit_stats` out too.
         digest = query_hash(tq.kind, with_instant_buyout(tq.query), sample)
-        key = f"trade://listings/{league}/{digest}"
+        key = f"trade://listings/v{LISTINGS_VERSION}/{league}/{digest}"
         cached = await self.cache.get(key)
         fresh = cached is not None and cached.age_seconds < self.config.trade_cache_min * 60
         if cached is not None and (fresh or cache_only):
