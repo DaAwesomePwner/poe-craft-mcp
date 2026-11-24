@@ -30,17 +30,18 @@ def expected_attempts(p: float) -> float:
 
 
 def n90(p: float) -> int:
-    """Smallest n >= 1 with (1 - p)**n <= 0.1, checked exactly in floats; 1 when p == 1."""
+    """Smallest n >= 1 with (1 - p)**n <= 0.1; 1 when p == 1.
+
+    Works in log space with log1p(-p), which is accurate even when 1 - p would round.
+    """
     _check_p(p)
     if p == 1:
         return 1
-    q = 1 - p
-    if q == 1:
-        return max(1, math.ceil(math.log(0.1) / math.log1p(-p)))
-    n = max(1, math.ceil(math.log(0.1) / math.log(q)))
-    while q**n > 0.1:
+    log_q, target = math.log1p(-p), math.log(0.1)
+    n = max(1, math.ceil(target / log_q))
+    while n * log_q > target:
         n += 1
-    while n > 1 and q ** (n - 1) <= 0.1:
+    while n > 1 and (n - 1) * log_q <= target:
         n -= 1
     return n
 

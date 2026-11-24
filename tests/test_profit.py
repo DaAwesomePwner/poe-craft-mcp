@@ -1,3 +1,5 @@
+import math
+
 import pytest
 
 from poe_craft_mcp.engine.profit import evaluate, expected_attempts, n90, to_divine
@@ -155,10 +157,17 @@ def test_divine_conversion_is_display_only() -> None:
 def test_n90_corrects_near_integer_boundaries() -> None:
     assert n90(0.89999999999) == 2  # (1 - p) is just above 0.1, so one attempt covers < 90%
     assert n90(0.89999999999999) == 2
-    just_above = 1 - 0.1000000000000001  # 1 - p > 0.1 by a single float step
+    just_above = 1 - 0.1000000000000001  # 1 - p lands a few float steps above 0.1
     assert 1 - just_above > 0.1 and n90(just_above) == 2
     assert n90(0.9) == 1
     assert n90(0.1) == 22 and n90(0.5) == 4
+
+
+def test_n90_tiny_p_reaches_ninety_percent() -> None:
+    p = 1e-16
+    n = n90(p)
+    assert n * math.log1p(-p) <= math.log(0.1) < (n - 1) * math.log1p(-p)
+    assert n == pytest.approx(math.log(10) / p, rel=1e-9)
 
 
 def test_salvage_applies_quantity() -> None:
