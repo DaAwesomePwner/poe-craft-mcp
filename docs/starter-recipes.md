@@ -36,8 +36,8 @@ ranking was about 37 minutes old. Chaos values per attempt: C = expected cost, C
 Read this before acting on it:
 
 - **Much of the cluster value comes from the misses.** About 95-99% of attempts end as a
-  one-notable rare (95.2% for Large Spell), valued at about 20-24 c. Those are instant-buyout
-  *asking* prices (p25 minus the undercut), not observed sales, and the misses make up roughly
+  one-notable rare (95.2% for Large Spell). Their instant-buyout *asking* prices (p25) are about
+  20-24 c, modelled at about 19-22.8 c after the 5% undercut; neither is an observed sale price, and the misses make up roughly
   52-78% of each cluster craft's expected value. Profit depends on actually selling many
   one-notable rares near that price, so list them steadily and re-check the price; a few dozen
   sales can move it.
