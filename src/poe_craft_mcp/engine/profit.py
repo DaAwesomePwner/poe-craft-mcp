@@ -16,7 +16,6 @@ from poe_craft_mcp.engine.types import (
 DEFAULT_UNDERCUT = 0.05
 STALE_SECONDS = 30 * 60
 PROBABILITY_TOLERANCE = 1e-6
-_N90_EPSILON = 1e-12
 
 
 def _check_p(p: float) -> None:
@@ -31,16 +30,18 @@ def expected_attempts(p: float) -> float:
 
 
 def n90(p: float) -> int:
-    """Attempts that cover 90% of runs: ceil(ln 0.1 / ln(1 - p)); 1 when p == 1."""
+    """Smallest n >= 1 with (1 - p)**n <= 0.1, checked exactly in floats; 1 when p == 1."""
     _check_p(p)
     if p == 1:
         return 1
-    n = max(1, math.ceil(math.log(0.1) / math.log1p(-p)))
-    limit = 0.1 * (1 + _N90_EPSILON)
-    if n > 1 and (1 - p) ** (n - 1) <= limit:
-        n -= 1
-    elif (1 - p) ** n > limit:
+    q = 1 - p
+    if q == 1:
+        return max(1, math.ceil(math.log(0.1) / math.log1p(-p)))
+    n = max(1, math.ceil(math.log(0.1) / math.log(q)))
+    while q**n > 0.1:
         n += 1
+    while n > 1 and q ** (n - 1) <= 0.1:
+        n -= 1
     return n
 
 

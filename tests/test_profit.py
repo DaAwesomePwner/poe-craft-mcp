@@ -154,6 +154,9 @@ def test_divine_conversion_is_display_only() -> None:
 
 def test_n90_corrects_near_integer_boundaries() -> None:
     assert n90(0.89999999999) == 2  # (1 - p) is just above 0.1, so one attempt covers < 90%
+    assert n90(0.89999999999999) == 2
+    just_above = 1 - 0.1000000000000001  # 1 - p > 0.1 by a single float step
+    assert 1 - just_above > 0.1 and n90(just_above) == 2
     assert n90(0.9) == 1
     assert n90(0.1) == 22 and n90(0.5) == 4
 
