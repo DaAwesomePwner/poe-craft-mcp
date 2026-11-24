@@ -88,5 +88,71 @@
    "ring",
    "default"
   ]
+ },
+ "Metadata/Items/Jewels/JewelPassiveTreeExpansionSmall": {
+  "domain": "affliction_jewel",
+  "drop_level": 1,
+  "implicits": [],
+  "inventory_height": 1,
+  "inventory_width": 1,
+  "inherits_from": "Metadata/Items/Jewels/AbstractJewel",
+  "item_class": "Jewel",
+  "name": "Small Cluster Jewel",
+  "properties": {},
+  "release_state": "released",
+  "tags": [
+   "jewel",
+   "not_for_sale",
+   "expansion_jewel_small",
+   "default"
+  ],
+  "visual_identity": {
+   "dds_file": "Art/2DItems/Jewels/NewGemBase1.dds",
+   "id": "ClusterJewelSmall__"
+  }
+ },
+ "Metadata/Items/Jewels/JewelPassiveTreeExpansionMedium": {
+  "domain": "affliction_jewel",
+  "drop_level": 1,
+  "implicits": [],
+  "inventory_height": 1,
+  "inventory_width": 1,
+  "inherits_from": "Metadata/Items/Jewels/AbstractJewel",
+  "item_class": "Jewel",
+  "name": "Medium Cluster Jewel",
+  "properties": {},
+  "release_state": "released",
+  "tags": [
+   "jewel",
+   "not_for_sale",
+   "expansion_jewel_medium",
+   "default"
+  ],
+  "visual_identity": {
+   "dds_file": "Art/2DItems/Jewels/NewGemBase2.dds",
+   "id": "ClusterJewelMedium"
+  }
+ },
+ "Metadata/Items/Jewels/JewelPassiveTreeExpansionLarge": {
+  "domain": "affliction_jewel",
+  "drop_level": 1,
+  "implicits": [],
+  "inventory_height": 1,
+  "inventory_width": 1,
+  "inherits_from": "Metadata/Items/Jewels/AbstractJewel",
+  "item_class": "Jewel",
+  "name": "Large Cluster Jewel",
+  "properties": {},
+  "release_state": "released",
+  "tags": [
+   "jewel",
+   "not_for_sale",
+   "expansion_jewel_large",
+   "default"
+  ],
+  "visual_identity": {
+   "dds_file": "Art/2DItems/Jewels/NewGemBase3.dds",
+   "id": "ClusterJewelLarge"
+  }
  }
 }

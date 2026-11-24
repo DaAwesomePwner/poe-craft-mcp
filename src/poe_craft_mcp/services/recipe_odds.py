@@ -68,6 +68,16 @@ def _item_level(
     ]
 
 
+def _options(chance: WeightsChance) -> dict[str, Any]:
+    """Cluster enchant and regal inputs, passed only when the recipe sets them."""
+    options = {
+        "enchant": chance.enchant,
+        "passives": chance.passives,
+        "existing_mods": chance.existing_mods,
+    }
+    return {key: value for key, value in options.items() if value is not None}
+
+
 async def _weights(
     ctx: AppContext, recipe: Recipe, step: str, chance: WeightsChance, base_ilvl: int | None
 ) -> StepChance:
@@ -82,7 +92,7 @@ async def _weights(
     try:
         data = await asyncio.to_thread(get_gamedata, ctx)
         result = await asyncio.to_thread(
-            mod_odds, data, base, ilvl, chance.target_mods, chance.method
+            mod_odds, data, base, ilvl, chance.target_mods, chance.method, **_options(chance)
         )
     except GameDataError as exc:
         return StepChance(step, None, unresolved, f"mod odds unavailable: {exc}")
@@ -91,6 +101,7 @@ async def _weights(
         "ilvl": ilvl,
         "method": result["method"],
         "target_mods": result["target_mods"],
+        **{k: result[k] for k in ("enchant", "expected_materials") if result.get(k) is not None},
         "export_version": result["export_version"],
         "assumptions": result["assumptions"],
         "odds_warnings": result["warnings"],

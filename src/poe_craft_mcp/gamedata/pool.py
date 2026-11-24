@@ -70,6 +70,9 @@ def entry_for(
         return f"{mod.id} has spawn weight 0 on {base.name} (tags: {', '.join(sorted(base.tags))})"
     generation = first_match(mod.generation_weights, base.tags)
     multiplier = (1.0 if generation is None else generation / 100) * fossil_multiplier(mod, fossils)
+    if generation == 0:
+        tags = ", ".join(sorted(base.tags))
+        return f"{mod.id} has generation weight 0 on this {base.name} (tags: {tags})"
     if multiplier <= 0:
         names = ", ".join(f.name for f in fossils) or "generation weights"
         return f"{mod.id} is blocked by {names} (weight multiplier 0)"

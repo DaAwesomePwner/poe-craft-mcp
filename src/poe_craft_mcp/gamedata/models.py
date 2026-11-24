@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 
 MIN_TRUSTED_PATCH = (3, 30)
@@ -29,6 +29,8 @@ class ModDef:
     generation_weights: TagWeights
     is_essence_only: bool
     text: str
+    adds_tags: frozenset[str] = frozenset()
+    """Tags the mod adds to the item once rolled (e.g. has_affliction_notable)."""
 
 
 @dataclass(frozen=True)
@@ -66,6 +68,26 @@ class Fossil:
 
 
 @dataclass(frozen=True)
+class ClusterEnchant:
+    """One 'Added Small Passive Skills grant: ...' enchant (RePoE cluster_jewels.json)."""
+
+    id: str
+    name: str
+    tag: str
+    """Tag the enchant gives the jewel; notables' spawn_weights reference it."""
+    stat_text: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class ClusterJewel:
+    base_id: str
+    name: str
+    min_skills: int
+    max_skills: int
+    enchants: tuple[ClusterEnchant, ...]
+
+
+@dataclass(frozen=True)
 class GameData:
     mods: dict[str, ModDef]
     bases: dict[str, BaseItem]
@@ -74,6 +96,8 @@ class GameData:
     game_version: str | None
     downloaded_at: datetime | None
     source_url: str
+    clusters: dict[str, ClusterJewel] = field(default_factory=dict)
+    """Cluster jewel bases by base id; empty when cluster_jewels.json is not in the export."""
 
     @property
     def stale_warning(self) -> str | None:

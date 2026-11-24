@@ -66,6 +66,11 @@ class WeightsChance(_Model):
     target_mods: list[Text] = Field(min_length=1)
     base: str | None = None
     ilvl: int | None = Field(None, ge=1, le=100)
+    enchant: str | None = Field(None, min_length=1)
+    """Cluster jewel enchant (name, id or text), required for cluster jewel bases."""
+    passives: int | None = Field(None, ge=1, le=12)
+    existing_mods: list[Text] | None = Field(None, min_length=1)
+    """Mods already on the magic item, for method `regal`."""
 
 
 class GuideChance(_Model):

@@ -15,13 +15,16 @@ from poe_craft_mcp.gamedata.models import (
     FETCH_HINT,
     BaseItem,
     Essence,
-    Fossil,
     GameData,
     GameDataError,
-    ModDef,
-    TagWeights,
 )
 from poe_craft_mcp.gamedata.publish import lock_path
+from poe_craft_mcp.gamedata.records import (
+    affix_deltas,
+    parse_clusters,
+    parse_fossil,
+    parse_mod,
+)
 
 log = logging.getLogger(__name__)
 
@@ -33,68 +36,11 @@ EXPORT_FILES = (
     "fossils",
     "crafting_bench_options",
     "stat_translations",
+    "cluster_jewels",
 )
 REQUIRED_FILES = ("mods", "base_items", "essences", "fossils")
 GAMEDATA_DIRNAME = "gamedata"
 MANIFEST_NAME = "manifest.json"
-AFFIX_LIMIT_STATS = ("local_maximum_prefixes_allowed_+", "local_maximum_suffixes_allowed_+")
-
-
-def _tag_weights(raw: list[dict[str, Any]]) -> TagWeights:
-    return tuple((str(w["tag"]), int(w["weight"])) for w in raw)
-
-
-def _mod(mod_id: str, raw: dict[str, Any]) -> ModDef:
-    return ModDef(
-        id=mod_id,
-        domain=raw["domain"],
-        generation_type=raw["generation_type"],
-        required_level=int(raw.get("required_level", 0)),
-        groups=frozenset(raw.get("groups", ())),
-        tags=frozenset(raw.get("implicit_tags", ())),
-        spawn_weights=_tag_weights(raw.get("spawn_weights", [])),
-        generation_weights=_tag_weights(raw.get("generation_weights", [])),
-        is_essence_only=bool(raw.get("is_essence_only", False)),
-        text=str(raw.get("text") or raw.get("name") or mod_id),
-    )
-
-
-def _fossil(fossil_id: str, raw: dict[str, Any]) -> Fossil:
-    unmodelled = []
-    if raw.get("rolls_lucky"):
-        unmodelled.append("lucky values and more common high-level mods (no exported weight rule)")
-    if raw.get("corrupted_essence_chance"):
-        unmodelled.append(f"{raw['corrupted_essence_chance']}% corrupted essence mod chance")
-    if raw.get("mirrors"):
-        unmodelled.append("fractures a random modifier")
-    if raw.get("sell_price_mods"):
-        unmodelled.append("adds vendor sell-price mods")
-    weights = _tag_weights(raw["positive_mod_weights"] + raw["negative_mod_weights"])
-    added, forced = tuple(raw.get("added_mods", ())), tuple(raw.get("forced_mods", ()))
-    if not (weights or added or forced or unmodelled):
-        descriptions = raw.get("descriptions", {}).values()
-        text = "; ".join(" ".join(str(d).split()) for d in descriptions)
-        unmodelled.append(f"effect not expressed as mod weights ({text or 'undescribed'})")
-    return Fossil(
-        id=fossil_id,
-        name=raw["name"],
-        weights=weights,
-        added_mods=added,
-        forced_mods=forced,
-        allowed_tags=frozenset(raw.get("allowed_tags", ())),
-        forbidden_tags=frozenset(raw.get("forbidden_tags", ())),
-        unmodelled=tuple(unmodelled),
-    )
-
-
-def _affix_deltas(implicits: list[str], raw_mods: dict[str, Any]) -> tuple[int, int]:
-    deltas = {stat: 0 for stat in AFFIX_LIMIT_STATS}
-    for implicit in implicits:
-        for stat in raw_mods.get(implicit, {}).get("stats", []):
-            if stat["id"] in deltas:
-                deltas[stat["id"]] += int(stat["min"])
-    prefix_stat, suffix_stat = AFFIX_LIMIT_STATS
-    return deltas[prefix_stat], deltas[suffix_stat]
 
 
 def _read_bytes(path: Path) -> bytes:
@@ -124,6 +70,15 @@ def _read_json(path: Path, manifest: dict[str, Any] | None = None) -> Any:
         return json.loads(content)
     except ValueError as exc:
         raise GameDataError(f"cannot read game data file {path}: {exc}; {FETCH_HINT}") from exc
+
+
+def _read_optional(directory: Path, name: str, manifest: dict[str, Any]) -> Any:
+    """A file only some odds need (cluster_jewels), or None when absent or not part of the
+    manifest's download (an export fetched before the file was added)."""
+    path = directory / f"{name}.json"
+    if not path.is_file() or ("files" in manifest and name not in manifest["files"]):
+        return None
+    return _read_json(path, manifest)
 
 
 def load_gamedata(directory: Path) -> GameData:
@@ -169,7 +124,7 @@ def _parse(directory: Path) -> GameData:
         m for f in raw_fossils.values() for m in f.get("added_mods", []) + f.get("forced_mods", [])
     }
     mods = {
-        mod_id: _mod(mod_id, raw)
+        mod_id: parse_mod(mod_id, raw)
         for mod_id, raw in raw_mods.items()
         if raw["generation_type"] in AFFIX_TYPES or mod_id in added
     }
@@ -181,7 +136,7 @@ def _parse(directory: Path) -> GameData:
             raw["item_class"],
             frozenset(raw["tags"]),
             raw.get("release_state", ""),
-            *_affix_deltas(raw.get("implicits", []), raw_mods),
+            *affix_deltas(raw.get("implicits", []), raw_mods),
         )
         for base_id, raw in _read_json(directory / "base_items.json", manifest).items()
         if raw.get("name")
@@ -190,7 +145,8 @@ def _parse(directory: Path) -> GameData:
         ess_id: Essence(ess_id, raw["name"], dict(raw["mods"]), raw.get("item_level_restriction"))
         for ess_id, raw in _read_json(directory / "essences.json", manifest).items()
     }
-    fossils = {fid: _fossil(fid, raw) for fid, raw in raw_fossils.items() if raw.get("name")}
+    fossils = {fid: parse_fossil(fid, raw) for fid, raw in raw_fossils.items() if raw.get("name")}
+    raw_clusters = _read_optional(directory, "cluster_jewels", manifest)
     downloaded = manifest.get("downloaded_at")
     return GameData(
         mods=mods,
@@ -200,6 +156,7 @@ def _parse(directory: Path) -> GameData:
         game_version=manifest.get("game_version"),
         downloaded_at=datetime.fromisoformat(downloaded) if downloaded else None,
         source_url=manifest.get("source", EXPORT_BASE_URL),
+        clusters=parse_clusters(raw_clusters) if raw_clusters else {},
     )
 
 
