@@ -21,6 +21,7 @@ from test_trade_pricing import TRADE, trade
 
 from poe_craft_mcp.clients.trade import TradeClient
 from poe_craft_mcp.context import AppContext
+from poe_craft_mcp.gamedata.combo_pairs import is_notable
 from poe_craft_mcp.gamedata.combos import ComboOdds, cluster_notables, combo_odds
 from poe_craft_mcp.gamedata.loader import load_gamedata
 from poe_craft_mcp.gamedata.models import GameData
@@ -28,7 +29,7 @@ from poe_craft_mcp.services.cluster_combos import ComboRequest, cluster_combos
 from poe_craft_mcp.services.combo_confirm import is_sellable, order_candidates
 from poe_craft_mcp.services.combo_costs import economics
 from poe_craft_mcp.services.combo_discovery import Tally, classify, tally
-from poe_craft_mcp.services.combo_notables import priceable
+from poe_craft_mcp.services.combo_notables import pool_change, priceable
 from poe_craft_mcp.services.combo_queries import (
     JewelFilter,
     base_query,
@@ -111,7 +112,10 @@ class FakeTrade:
         key = self.key(body)
         if key in self.fail:
             return self.fail[key]
-        rows = self.responses.get(key, [])
+        # Like the trade site, a `not` group drops listings holding any of its stats.
+        stats = body["query"]["stats"]
+        excluded = {f["id"] for g in stats if g["type"] == "not" for f in g["filters"]}
+        rows = [r for r in self.responses.get(key, []) if not excluded & set(r[2])]
         search_id = f"q{len(self.searches)}"
         self._results[search_id] = rows
         result = [f"{search_id}x{i}" for i in range(len(rows))]
@@ -577,7 +581,7 @@ async def test_lower_ilvl_warns_when_base_pool_differs(
     scenario(fake)
     payload, _ = await cluster_combos(ctx, data, request(ilvl=50))
     assert payload["notables"]["legal_pairs"] == 1
-    assert any("notable pool at 83 differs from item level 50" in w for w in payload["warnings"])
+    assert any("mod pool at 83 differs from item level 50" in w for w in payload["warnings"])
     base = next(b for b in fake.searches if fake.key(b) == "base")
     assert base["query"]["filters"]["misc_filters"]["filters"]["ilvl"] == {"min": 50, "max": 83}
 
@@ -605,6 +609,7 @@ async def test_no_priceable_pair(ctx: AppContext, fake: FakeTrade, data: GameDat
     [
         ({"min_value_div": 0}, "min_value_div"),
         ({"min_listings": 0}, "min_listings"),
+        ({"min_listings": 101}, "min_listings must be 1-100"),
         ({"discovery_sample": 101}, "discovery_sample"),
         ({"max_pair_searches": -1}, "max_pair_searches"),
         ({"minutes_per_attempt": float("inf")}, "minutes_per_attempt"),
@@ -615,3 +620,123 @@ async def test_bad_arguments(
 ) -> None:
     with pytest.raises(ValueError, match=message):
         await cluster_combos(ctx, data, request(**overrides))
+
+
+# --- review fixes -----------------------------------------------------------------------------
+
+NOT_LT_FL = {"type": "not", "filters": [{"id": T_LT}, {"id": T_FL}]}  # sorted trade ids
+EVERY = [T_WP, T_ES, T_LT, T_FL]
+
+
+def test_pair_and_miss_queries_exclude_other_notables() -> None:
+    both = {"type": "and", "filters": [{"id": T_WP}, {"id": T_ES}]}
+    assert pair_query(JEWEL, T_WP, T_ES, EVERY)["query"]["stats"][1:] == [both, NOT_LT_FL]
+    one = {"type": "count", "value": {"min": 1, "max": 1}, "filters": [{"id": T_WP}, {"id": T_ES}]}
+    assert miss_query(JEWEL, [T_ES, T_WP], EVERY)["query"]["stats"][1:] == [one, NOT_LT_FL]
+    assert len(pair_query(JEWEL, T_WP, T_ES, [T_WP, T_ES])["query"]["stats"]) == 2
+
+
+async def test_three_notable_jewels_never_confirm_a_pair(
+    ctx: AppContext, fake: FakeTrade, data: GameData
+) -> None:
+    """One ES+WP listing and two ES+WP+LT ones: only one listing of the pair, so it is not
+    sellable at min_listings 3."""
+    scenario(fake)
+    fake.responses[pkey(T_ES, T_WP)] = [(2, "divine", (T_ES, T_WP))] + [
+        (5, "divine", (T_ES, T_WP, T_LT))
+    ] * 2
+    payload, _ = await cluster_combos(ctx, data, request())
+    sent = next(b for b in fake.searches if fake.key(b) == pkey(T_ES, T_WP))
+    assert sent["query"]["stats"][2] == NOT_LT_FL
+    assert [r["pair"] for r in payload["sellable_pairs"]] == ["Flow of Life + Wicked Pall"]
+    miss = next(b for b in fake.searches if fake.key(b) == "miss")
+    # Only FL+WP sold, so FL and WP are the anchors; ES and LT are excluded.
+    not_anchor = {"type": "not", "filters": [{"id": T_LT}, {"id": T_ES}]}
+    assert miss["query"]["stats"][2] == not_anchor
+
+
+async def test_unconvertible_miss_and_base_stay_unknown(
+    ctx: AppContext, fake: FakeTrade, data: GameData
+) -> None:
+    scenario(fake)
+    fake.responses["miss"] = [(20, "nonsense", (T_ES,))] * 3
+    fake.responses["base"] = [(5, "nonsense", ())] * 2
+    payload, _ = await cluster_combos(ctx, data, request())
+    econ = payload["economics"]
+    assert econ["miss_value"] is None and econ["expected_value"] is None
+    assert econ["costs"]["base"] is None and econ["profit_per_attempt"] is None
+    warnings = payload["warnings"]
+    assert any(
+        w.startswith("miss value unavailable (3 listing(s) found but none could be priced")
+        and "3 nonsense" in w
+        for w in warnings
+    )
+    assert any("white base price unavailable (2 listing(s)" in w for w in warnings)
+    assert not any("valued at 0" in w for w in warnings)
+
+
+async def test_truly_empty_miss_is_worth_zero(
+    ctx: AppContext, fake: FakeTrade, data: GameData
+) -> None:
+    scenario(fake)
+    fake.responses["miss"] = []
+    payload, _ = await cluster_combos(ctx, data, request())
+    econ = payload["economics"]
+    assert econ["miss_value"] == 0 and econ["profit_per_attempt"] is not None
+    assert any("misses are valued at 0" in w for w in payload["warnings"])
+
+
+async def test_pair_sample_covers_min_listings(
+    ctx: AppContext, fake: FakeTrade, data: GameData
+) -> None:
+    """trade_sample 2 would fetch two of ES+WP's five listings; min_listings 3 needs three."""
+    ctx.config = ctx.config.model_copy(update={"trade_sample": 2})
+    scenario(fake)
+    payload, _ = await cluster_combos(ctx, data, request())
+    rows = {r["pair"]: r for r in payload["sellable_pairs"]}
+    assert rows["Eternal Suffering + Wicked Pall"]["listings"] == 3
+    assert request(min_listings=150).pair_sample(30) == 100
+    assert request(min_listings=3).pair_sample(30) == 30
+
+
+async def test_stale_fallback_never_confirms(
+    ctx: AppContext, fake: FakeTrade, data: GameData, clock: FakeClock
+) -> None:
+    """Expired cached quote + HTTP 429: listings_for serves the stale copy, which must not
+    count as a confirmation."""
+    scenario(fake)
+    await cluster_combos(ctx, data, request())
+    clock.advance(25 * 60)
+    fake.fail[pkey(T_ES, T_WP)] = httpx.Response(429, headers={"Retry-After": "60"})
+    payload, _ = await cluster_combos(ctx, data, request())
+    conf = payload["confirmation"]
+    assert "stale cached copy" in conf["stopped"]
+    assert (conf["from_cache"], conf["sellable"], conf["unconfirmed_count"]) == (0, 0, 3)
+    assert "hint" in conf and payload["sellable_pairs"] == [] and payload["economics"] is None
+
+
+async def test_stale_miss_and_base_are_not_used(
+    ctx: AppContext, fake: FakeTrade, data: GameData, clock: FakeClock
+) -> None:
+    scenario(fake)
+    await cluster_combos(ctx, data, request())
+    clock.advance(25 * 60)
+    fake.fail["miss"] = httpx.Response(500)
+    fake.fail["base"] = httpx.Response(500)
+    payload, _ = await cluster_combos(ctx, data, request())
+    assert len(payload["sellable_pairs"]) == 2
+    econ = payload["economics"]
+    assert econ["miss_value"] is None and econ["costs"]["base"] is None
+    assert econ["profit_per_attempt"] is None
+    stale = [w for w in payload["warnings"] if "stale cached copy" in w]
+    assert len(stale) == 2
+
+
+def test_pool_change_counts_non_notable_mods(data: GameData) -> None:
+    info = cluster_notables(data, "Medium Cluster Jewel", 84, "Chaos Damage over Time", 4)
+    small = next(e for e in info.pool if not is_notable(e.mod) and e.weight > 0)
+    fewer = replace(info, pool=tuple(e for e in info.pool if e is not small))
+    assert pool_change(fewer, info) == f"adds: {small.mod.id}"
+    assert pool_change(info, info) is None
+    doubled = tuple(replace(e, multiplier=2 * e.multiplier) if e is small else e for e in info.pool)
+    assert pool_change(info, replace(info, pool=doubled)) == f"reweights: {small.mod.id}"

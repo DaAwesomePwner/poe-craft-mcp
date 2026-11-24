@@ -11,8 +11,6 @@ Only instant-buyout listings are used, never whisper listings.
 
 from __future__ import annotations
 
-import math
-from dataclasses import dataclass
 from typing import Any
 
 from poe_craft_mcp.clients.ninja import get_ninja, rates_from
@@ -30,7 +28,7 @@ from poe_craft_mcp.services.combo_notables import (
     pair_row,
     priceable,
 )
-from poe_craft_mcp.services.combo_queries import SALE_FILTER_ASSUMPTION, JewelFilter, pair_query
+from poe_craft_mcp.services.combo_queries import JewelFilter, pair_query
 from poe_craft_mcp.services.combo_report import (
     ROW_LIMIT,
     classes_report,
@@ -40,52 +38,11 @@ from poe_craft_mcp.services.combo_report import (
     unique_sources,
     why_rows,
 )
+from poe_craft_mcp.services.combo_request import PRICING_ASSUMPTIONS, ComboRequest
 from poe_craft_mcp.services.combo_value import price_sellable
 from poe_craft_mcp.services.trade_pricing import PricingUnavailable
 
-PRICING_ASSUMPTIONS = (
-    "Only instant-buyout (asynchronous trade) listings are used; whisper listings never are",
-    SALE_FILTER_ASSUMPTION,
-    "Threshold T = min_value_div x poe.ninja chaos per Divine; discovery price bounds use the "
-    "trade site's own chaos-equivalent conversion, listings are converted at poe.ninja rates",
-    "Discovery: a pair with min_listings or more listings at or below T is not sellable; a pair "
-    "with fewer there and any at or above T is a candidate, confirmed by its exact search",
-    "A pair's value is the p25 of its cheapest listings less undercut_pct; it is sellable when "
-    "that value is at least T and it has at least min_listings listings",
-    "A miss sells as a rare with exactly one anchor notable (p25 less undercut_pct); the white "
-    "base is bought at its p25 without undercut",
-)
-
-
-@dataclass(frozen=True)
-class ComboRequest:
-    base: str
-    enchant: str
-    passives: int
-    ilvl: int
-    min_value_div: float = 1.0
-    min_listings: int = 3
-    max_pair_searches: int = 12
-    discovery_sample: int = 100
-    minutes_per_attempt: float = 4.0
-    max_seconds: float = 90.0
-
-    def check(self) -> None:
-        """Raise ValueError for an argument out of range."""
-        positive = {
-            "min_value_div": self.min_value_div,
-            "minutes_per_attempt": self.minutes_per_attempt,
-            "max_seconds": self.max_seconds,
-        }
-        for name, value in positive.items():
-            if not (math.isfinite(value) and value > 0):
-                raise ValueError(f"{name} must be a finite number > 0 (got {value})")
-        if self.min_listings < 1:
-            raise ValueError(f"min_listings must be at least 1 (got {self.min_listings})")
-        if self.max_pair_searches < 0:
-            raise ValueError(f"max_pair_searches must be >= 0 (got {self.max_pair_searches})")
-        if not 1 <= self.discovery_sample <= 100:
-            raise ValueError(f"discovery_sample must be 1-100 (got {self.discovery_sample})")
+__all__ = ["ComboRequest", "cluster_combos"]
 
 
 async def _rates(ctx: AppContext) -> tuple[str, Dataset, float]:
@@ -159,6 +116,11 @@ async def cluster_combos(
         deadline=deadline,
     )
     warnings += disc.warnings
+    if any(src.get("stale") for src in disc.sources):
+        warnings.append(
+            "a discovery search was served from a stale cache (the trade site refused a new "
+            "search); its classes may be out of date"
+        )
     out["discovery"] = {
         "below_threshold": disc.below.report(),
         "at_or_above_threshold": disc.above.report(),
@@ -168,9 +130,14 @@ async def cluster_combos(
     weights = {e.mod.id: e.weight for e in info.notables}
     ordered = order_candidates([p for p, c in disc.classes.items() if c == "candidate"], weights)
     ids = split.trade_ids
-    rules = Rules(threshold, req.min_listings, undercut, req.max_pair_searches, deadline)
+    sample = req.pair_sample(ctx.config.trade_sample)
+    rules = Rules(threshold, req.min_listings, undercut, req.max_pair_searches, deadline, sample)
     conf = await confirm(
-        ctx, league, ordered, lambda p: pair_query(jewel, *(ids[m] for m in sorted(p))), rules
+        ctx,
+        league,
+        ordered,
+        lambda p: pair_query(jewel, *(ids[m] for m in sorted(p)), ids.values()),
+        rules,
     )
     cache_min = ctx.config.trade_cache_min
     out["confirmation"] = confirmation_report(data, conf, len(ordered), ids, cache_min)

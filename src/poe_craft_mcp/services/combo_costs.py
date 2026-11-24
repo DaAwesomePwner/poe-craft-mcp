@@ -34,18 +34,20 @@ def chance(value: float | None) -> float | None:
 
 @dataclass
 class TradeValue:
-    """A trade search priced at p25 (`chaos` after `undercut`), or why it could not be."""
+    """A trade search priced at p25 (`chaos` after `undercut`), or why it could not be.
+
+    `chaos` is set only from fresh, convertible listings. `empty` means the search worked and
+    returned no instant-buyout listing at all; otherwise a missing `chaos` has an `error`."""
 
     chaos: float | None
     p25: float | None = None
     listing_count: int | None = None
     error: str | None = None
+    empty: bool = False
     sources: list[Source] = field(default_factory=list)
 
-    @property
-    def empty(self) -> bool:
-        """The search worked but had no usable listings."""
-        return self.error is None and self.p25 is None
+
+STALE = "only a stale cached copy was served (the trade site refused a new search); retry later"
 
 
 async def trade_value(
@@ -57,7 +59,16 @@ async def trade_value(
         wait = f"; retry in about {exc.retry_after:.0f}s" if exc.retry_after is not None else ""
         return TradeValue(None, error=f"{exc.reason}{wait}")
     src = [price.sources[-1]]
-    chaos = None if price.p25 is None else price.p25 * (1 - undercut)
+    if price.stale:
+        return TradeValue(None, listing_count=price.listing_count, error=STALE, sources=src)
+    if price.raw_count == 0:
+        return TradeValue(None, listing_count=0, empty=True, sources=src)
+    if price.p25 is None:
+        unknown = ", ".join(f"{n} {c}" for c, n in sorted(price.dropped_unknown_currency.items()))
+        detail = f" (unknown currencies: {unknown})" if unknown else ""
+        error = f"{price.raw_count} listing(s) found but none could be priced{detail}"
+        return TradeValue(None, listing_count=0, error=error, sources=src)
+    chaos = price.p25 * (1 - undercut)
     return TradeValue(chaos, price.p25, price.listing_count, sources=src)
 
 

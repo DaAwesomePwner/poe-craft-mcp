@@ -95,15 +95,29 @@ def discovery_query(
     return _body(jewel, [group], price=price)
 
 
-def pair_query(jewel: JewelFilter, a: str, b: str) -> dict[str, Any]:
-    """Rares holding both notables (trade ids `a` and `b`)."""
-    return _body(jewel, [{"type": "and", "filters": _ids((a, b))}])
+def _none_of(trade_ids: Iterable[str]) -> list[dict[str, Any]]:
+    """A `not` group excluding every listed notable (empty list when there is none)."""
+    ids = _ids(set(trade_ids))
+    return [{"type": "not", "filters": ids}] if ids else []
 
 
-def miss_query(jewel: JewelFilter, anchor_ids: Iterable[str]) -> dict[str, Any]:
-    """Rares holding exactly one of the anchor notables: what a missed attempt sells as."""
-    group = {"type": "count", "value": {"min": 1, "max": 1}, "filters": _ids(anchor_ids)}
-    return _body(jewel, [group])
+def pair_query(
+    jewel: JewelFilter, a: str, b: str, notable_ids: Iterable[str] = ()
+) -> dict[str, Any]:
+    """Rares holding both notables (trade ids `a` and `b`) and none of the other
+    `notable_ids`, so a three-notable jewel never counts as a listing of the pair."""
+    others = set(notable_ids) - {a, b}
+    return _body(jewel, [{"type": "and", "filters": _ids((a, b))}, *_none_of(others)])
+
+
+def miss_query(
+    jewel: JewelFilter, anchor_ids: Iterable[str], notable_ids: Iterable[str] = ()
+) -> dict[str, Any]:
+    """Rares holding exactly one of the anchor notables and none of the other `notable_ids`:
+    what a missed attempt sells as."""
+    anchors = set(anchor_ids)
+    group = {"type": "count", "value": {"min": 1, "max": 1}, "filters": _ids(anchors)}
+    return _body(jewel, [group, *_none_of(set(notable_ids) - anchors)])
 
 
 def base_ilvl_range(ilvl: int) -> tuple[int, int]:

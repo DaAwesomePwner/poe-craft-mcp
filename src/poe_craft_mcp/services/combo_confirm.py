@@ -2,8 +2,10 @@
 
 Candidates go in spawn-weight order (w_a * w_b, most likely first). Pairs whose search is
 already cached (younger than `trade_cache_min`) are free and always taken; then at most
-`max_pair_searches` live searches run before the deadline. A pair is sellable when its value
-(p25 less the undercut) is at least the threshold and it has at least `min_listings` listings.
+`max_pair_searches` live searches run before the deadline. A stale copy never confirms a
+pair: a live search answered from an expired cache stops confirmation like a rate limit.
+A pair is sellable when its value (p25 less the undercut) is at least the threshold and it
+has at least `min_listings` listings.
 """
 
 from __future__ import annotations
@@ -65,6 +67,8 @@ class Rules:
     max_searches: int
     deadline: float
     """On the trade limiter's clock (`ctx.cache.clock`)."""
+    sample: int
+    """Listings fetched per pair search; at least min_listings (see ComboRequest)."""
 
 
 def _priced(pair: Pair, price: OutcomePrice, rules: Rules, cached: bool) -> PairPrice:
@@ -94,12 +98,12 @@ async def confirm(
     for pair in ordered:
         try:
             price = await price_outcome(
-                ctx, query_json=query_for(pair), league=league, cache_only=True
+                ctx, query_json=query_for(pair), sample=rules.sample, league=league, cache_only=True
             )
         except PricingUnavailable:  # QuoteNotCached, or nothing usable cached
             uncached.append(pair)
             continue
-        if price.age_seconds >= fresh_s:
+        if price.stale or price.age_seconds >= fresh_s:
             uncached.append(pair)
             continue
         out.priced.append(_priced(pair, price, rules, cached=True))
@@ -116,7 +120,11 @@ async def confirm(
             break
         try:
             price = await price_outcome(
-                ctx, query_json=query_for(pair), league=league, deadline=rules.deadline
+                ctx,
+                query_json=query_for(pair),
+                sample=rules.sample,
+                league=league,
+                deadline=rules.deadline,
             )
         except PricingUnavailable as exc:
             if exc.retry_after is not None:
@@ -131,6 +139,13 @@ async def confirm(
             out.errors[pair] = exc.reason
             continue
         out.searched += 1
+        if price.stale:  # the trade site refused the search and an expired copy was served
+            out.stopped = (
+                "the trade site served only a stale cached copy (rate limited or failing); "
+                "retry later"
+            )
+            out.unconfirmed = uncached[i:]
+            break
         out.priced.append(_priced(pair, price, rules, cached=False))
         out.sources.append(price.sources[-1])
     return out

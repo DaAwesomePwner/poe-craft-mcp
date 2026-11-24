@@ -23,7 +23,7 @@ from poe_craft_mcp.services.combo_queries import (
 )
 
 if TYPE_CHECKING:
-    from poe_craft_mcp.services.cluster_combos import ComboRequest
+    from poe_craft_mcp.services.combo_request import ComboRequest
 
 
 @dataclass
@@ -44,7 +44,7 @@ def _pool_warning(data: GameData, req: ComboRequest, info: ClusterNotables) -> s
     if change is None:
         return None
     return (
-        f"the white base is priced at item level {lo}-{hi}, but the notable pool at {hi} differs "
+        f"the white base is priced at item level {lo}-{hi}, but the mod pool at {hi} differs "
         f"from item level {req.ilvl} ({change}): buying a higher-level base changes the odds"
     )
 
@@ -68,22 +68,22 @@ async def price_sellable(
     anchors = sorted(frozenset().union(*values))
     warnings: list[str] = []
 
-    miss_search = miss_query(jewel, [trade_ids[m] for m in anchors])
+    miss_search = miss_query(jewel, [trade_ids[m] for m in anchors], trade_ids.values())
     miss = await trade_value(ctx, league, miss_search, undercut)
     miss_value = miss.chaos
-    if miss.error:
-        why = f"miss value unavailable ({miss.error})"
-        warnings.append(f"{why}; expected value and profit are null")
-    elif miss.empty:
+    if miss.empty:
         miss_value = 0.0
         warnings.append(
             "no instant-buyout listings for a rare with exactly one anchor notable: misses are "
             "valued at 0"
         )
+    elif miss_value is None:
+        why = f"miss value unavailable ({miss.error})"
+        warnings.append(f"{why}; expected value and profit are null")
 
     base = await trade_value(ctx, league, base_query(jewel, req.ilvl))
-    if base.p25 is None:
-        why = base.error or "no instant-buyout listings"
+    if base.chaos is None:
+        why = "no instant-buyout listings" if base.empty else base.error
         warnings.append(f"white base price unavailable ({why}); cost and profit are null")
     pool = _pool_warning(data, req, info)
     if pool:
@@ -97,7 +97,7 @@ async def price_sellable(
     econ = economics(
         odds,
         miss_value=miss_value,
-        base=base.p25,
+        base=base.chaos,
         orbs=orbs,
         minutes_per_attempt=req.minutes_per_attempt,
         chaos_per_divine=per_divine,

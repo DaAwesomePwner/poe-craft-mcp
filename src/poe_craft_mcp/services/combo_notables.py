@@ -89,9 +89,11 @@ def pair_names(data: GameData, pairs: Iterable[Pair], limit: int) -> list[str]:
 
 
 def pool_change(info: ClusterNotables, other: ClusterNotables) -> str | None:
-    """How the notable pool at `other.ilvl` differs from `info`'s, or None when the same."""
-    mine = {e.mod.id: e.weight for e in info.notables}
-    theirs = {e.mod.id: e.weight for e in other.notables}
+    """How the mod pool at `other.ilvl` differs from `info`'s, or None when the same.
+
+    Every weighted entry counts, notable or not: any change moves the anchor odds."""
+    mine = {e.mod.id: e.weight for e in info.pool if e.weight > 0}
+    theirs = {e.mod.id: e.weight for e in other.pool if e.weight > 0}
     if mine == theirs:
         return None
     added = sorted(theirs.keys() - mine.keys())
