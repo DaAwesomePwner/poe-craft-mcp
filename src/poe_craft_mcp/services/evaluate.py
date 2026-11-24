@@ -24,6 +24,7 @@ NO_SALE = (
     "no priced sale outcome: every outcome is a failure value (fixed_chaos/use_salvage); "
     "add an outcome with a trade_url"
 )
+OVERRIDDEN_SALE = "sale price overridden: no live listings for '{}'"
 
 
 @dataclass
@@ -124,7 +125,13 @@ async def evaluate_recipe(
     base = b.add(await pricer.base(recipe.base))
     steps = [await b.step(n, s, base.ilvl) for n, s in enumerate(recipe.steps, 1)]
     outcomes = [await b.outcome(o) for o in recipe.outcomes]
+    sale_names = {o.name for o in recipe.outcomes if o.trade_url is not None}
     unrankable = [] if any(not o.is_failure for o in outcomes) else [NO_SALE]
+    unrankable += [
+        OVERRIDDEN_SALE.format(i.name)
+        for i in b.inputs
+        if i.kind == "outcome" and i.status == "override" and i.name in sale_names
+    ]
 
     for name in pricer.unused_overrides():
         b.warnings.append(f"price override {name!r} matches no input of this recipe; ignored")

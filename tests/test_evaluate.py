@@ -361,3 +361,42 @@ async def test_trade_age_includes_the_currency_rate_age(
     assert bow.chaos == pytest.approx(0.05 * 195) and bow.stale
     assert bow.source["age_seconds"] == 0 and 2400 <= (bow.age_seconds or 0) < 2460
     assert "quote age: crafted bow price is 40 min old" in ev.warnings
+
+
+async def test_overridden_sale_price_is_shown_but_not_rankable(
+    ctx: AppContext, api: NinjaApi, store: RecipeStore
+) -> None:
+    recipe = store.get("bow-flip")
+    assert recipe is not None
+    outcome = recipe.outcomes[0].model_copy(update={"trade_url": "https://x/trade/<id>"})
+    placeholder = recipe.model_copy(update={"outcomes": [outcome]})
+    pricer = Pricer(ctx, check_overrides({"crafted bow": 100}))
+    ev = await evaluate_recipe(ctx, placeholder, pricer, 0.05)
+    assert ev.breakdown is not None and ev.breakdown.v == pytest.approx(95)
+    assert ev.rank_blockers() == ["sale price overridden: no live listings for 'crafted bow'"]
+
+
+async def test_limiter_wait_past_the_budget_counts_as_time_budget(
+    ctx: AppContext, api: NinjaApi, trade: TradeClient, clock: FakeClock
+) -> None:
+    search, _ = mock_trade(api)
+    trade.limiter.paused_until = clock() + 2  # a short wait the limiter would normally make
+    with pytest.raises(TimeBudgetSpent):
+        await Pricer(ctx, deadline=clock() + 1, clock=clock).trade("outcome", "x", SAVED_URL)
+    trade.limiter.paused_until = clock() + 90  # a real rate limit, longer than any wait
+    real = await Pricer(ctx, deadline=clock() + 60, clock=clock).trade("outcome", "x", SAVED_URL)
+    assert real.error is not None and real.error.startswith("price unavailable")
+    assert search.call_count == 0
+
+
+async def test_stale_rates_do_not_age_chaos_only_listings(
+    ctx: AppContext, api: NinjaApi, trade: TradeClient, store: RecipeStore, clock: FakeClock
+) -> None:
+    mock_trade(api)
+    await run(ctx, store, "bow-flip")
+    clock.advance(40 * 60)
+    api.endpoints["Currency"].status = 500  # rates stale, but no listing needed converting
+    ev = await run(ctx, store, "bow-flip")
+    bow = by_name(ev)["crafted bow"]
+    assert (bow.stale, bow.age_seconds) == (False, 0)
+    assert not any("crafted bow" in w for w in ev.warnings)

@@ -14,6 +14,7 @@ from typing import Any
 
 from poe_craft_mcp.clients.ninja import get_ninja
 from poe_craft_mcp.clients.ninja_models import NinjaError
+from poe_craft_mcp.clients.trade import get_trade
 from poe_craft_mcp.context import AppContext
 from poe_craft_mcp.engine.types import Source
 from poe_craft_mcp.envelope import source
@@ -156,6 +157,15 @@ class Pricer:
     def _spent(self) -> bool:
         return self.deadline is not None and self.clock() >= self.deadline
 
+    def _budget_refused(self, exc: PricingUnavailable) -> bool:
+        """True when the limiter refused a wait it would have made without our deadline:
+        the wait fits its own `max_wait_s` but ends past the time budget."""
+        wait = exc.retry_after
+        if self.deadline is None or wait is None:
+            return False
+        limit = get_trade(self.ctx).limiter.max_wait_s
+        return wait <= limit and self.clock() + wait > self.deadline
+
     async def _lookup(self, name: str, url: str) -> OutcomePrice | str:
         """Trade price for `url`; past the deadline only cached listings are served."""
         try:
@@ -165,7 +175,7 @@ class Pricer:
         except QuoteNotCached:
             raise TimeBudgetSpent(name) from None
         except PricingUnavailable as exc:
-            if self._spent():  # cut short by our own deadline, not by the trade site
+            if self._spent() or self._budget_refused(exc):
                 raise TimeBudgetSpent(name) from None
             return f"price unavailable: {exc.reason}"
         except ValueError as exc:
@@ -185,10 +195,11 @@ class Pricer:
         if isinstance(found, str):
             return Priced(kind, name, None, source("trade", url=url), "error", error=found)
         trade_source = found.sources[-1]
-        age = found.age_seconds
-        if set(found.currency_mix) - {"chaos"}:  # converted with poe.ninja Currency rates
-            rates = [s["age_seconds"] for s in found.sources[:-1] if s["name"] == CURRENCY]
-            age = max([age, *(a for a in rates if a is not None)])
+        age, stale = found.age_seconds, bool(trade_source.get("stale"))
+        if set(found.currency_mix) - {"chaos"}:  # some listings converted at Currency rates
+            rates = [s for s in found.sources[:-1] if s["name"] == CURRENCY]
+            age = max([age, *(s["age_seconds"] for s in rates if s["age_seconds"] is not None)])
+            stale = stale or any(s.get("stale") for s in rates)
         return Priced(
             kind,
             name,
@@ -200,5 +211,5 @@ class Pricer:
             listing_count=found.listing_count,
             error=None if found.p25 is not None else "no usable listings",
             sources=list(found.sources),
-            stale=found.stale,
+            stale=stale,
         )

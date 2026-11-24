@@ -48,7 +48,6 @@ def breakdown_view(ev: Evaluation) -> dict[str, Any] | None:
     if b is None:
         return None
     return {
-        "undercut": b.undercut,
         "base": dataclasses.asdict(b.base) if b.base else None,
         "steps": [dataclasses.asdict(s) for s in b.steps],
         "materials": [dataclasses.asdict(m) for m in b.materials],
@@ -62,6 +61,7 @@ def full_report(ev: Evaluation, chaos_per_divine: float | None) -> dict[str, Any
     return {
         **summary(ev, chaos_per_divine),
         "chaos_per_divine": chaos_per_divine,
+        "undercut": ev.breakdown.undercut if ev.breakdown else None,
         "breakdown": breakdown_view(ev),
         "inputs": [i.report() for i in ev.inputs],
         "odds": [c.report() for c in ev.chances],

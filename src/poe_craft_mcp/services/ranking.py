@@ -111,6 +111,7 @@ async def rank_recipes(
         "budget_div": req.budget_div,
         "budget_chaos": req.budget_div * per_divine,
         "chaos_per_divine": per_divine,
+        "undercut": undercut,
         "risk": req.risk,
         "min_listings": req.min_listings,
         "items": items,

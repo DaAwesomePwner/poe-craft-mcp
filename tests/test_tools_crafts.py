@@ -83,7 +83,11 @@ async def test_evaluate_recipe_overrides_and_errors(
         negative = await client.call_tool(
             "evaluate_recipe", {"id": "bow-flip", "price_overrides": {"Bench craft": -1}}
         )
-    assert data["v"] == pytest.approx(19.0)
+    assert data["v"] == pytest.approx(19.0) and data["undercut"] == 0.05
+    assert data["rankable"] is False
+    assert data["not_rankable_reasons"] == [
+        "sale price overridden: no live listings for 'crafted bow'"
+    ]
     assert unknown.is_error and "known ids: bow-flip, deprecated-flip" in str(unknown.content)
     assert negative.is_error and "finite and >= 0" in str(negative.content)
 
@@ -106,6 +110,7 @@ async def test_rank_hides_unverified_by_default(
     data = await rank(ctx, budget_div=1)
     assert ids(data) == VERIFIED_ORDER
     assert data["hidden_unverified"] == 1 and data["excluded"] == []
+    assert data["undercut"] == 0.05 and data["items"][0]["undercut"] == 0.05
     first = data["items"][0]
     assert first["profit_per_hour"] == pytest.approx(135) and first["c90"] == pytest.approx(2.5)
     life = data["items"][2]
