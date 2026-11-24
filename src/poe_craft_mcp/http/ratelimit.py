@@ -37,8 +37,10 @@ _SECONDS_RE = re.compile(r"\d+(\.\d+)?", re.ASCII)
 class RateLimited(Exception):
     """A trade call would wait more than the limit, or the server answered 429.
 
-    `cause` is "deadline" when the caller's deadline refused or cut short a wait or send,
-    "server" for a 429 or a queue pause caused by one.
+    `cause` is "deadline" when the caller's deadline refused a wait before anything was sent,
+    "cancelled" when it cut off a request already in flight (`retry_after` is then the wait
+    for the next request, not the reason for the failure), "server" for a 429 or a queue
+    pause caused by one.
     """
 
     def __init__(self, retry_after: float, reason: str, cause: str = "server") -> None:
@@ -257,7 +259,7 @@ class RateLimiter:
             except TimeoutError:
                 # The hit stays recorded: the request may have reached the server.
                 raise RateLimited(
-                    self.wait_for(kind), f"{kind} request ran past deadline", "deadline"
+                    self.wait_for(kind), f"{kind} request ran past deadline", "cancelled"
                 ) from None
             self._observe(kind, response)
             if response.status_code == 429:
