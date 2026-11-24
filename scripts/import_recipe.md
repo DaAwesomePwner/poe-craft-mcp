@@ -50,16 +50,25 @@ The YAML must validate against `src/poe_craft_mcp/recipes/recipe.schema.json`:
     - `{ p_source: guide, value: <0-1>, source_url: "<url>" }` when the guide states the odds
       or gives numbers you can turn into odds (show the arithmetic in `notes`);
     - `{ p_source: weights, method: "<chaos|alt|essence:<name>|fossil:<a>[,<b>...]>", target_mods: ["<mods.json id>"], base: "<base type>", ilvl: <n> }`
-      only when you know the exact mod ids, otherwise use the placeholder `"<mod id>"` and
-      flag it;
+      only for those four methods and only when you know the exact mod ids, otherwise use the
+      placeholder `"<TODO mod id>"` and flag it;
     - `{ p_source: user, value: <0-1> }` when the user told you their own number.
   **A repeated step without published odds.** If the guide says "repeat until X" and gives no
   odds, never invent a number and never drop `repeat_until`/`p_success` (that would price the
   step as one attempt). Write
   `p_success: { p_source: weights, method: "<chaos|alt|essence:<essence>|fossil:<a>[,<b>...]>", target_mods: ["<TODO mod id>"] }`
-  with the method the guide uses. The placeholder makes evaluation fail loudly until the user
-  replaces it with a real mod id (find one with the `mod_odds` tool), a guide number or their
-  own number. If the guide's method is not one of those four, say so in the checklist.
+  with the method the guide uses. This works ONLY for those four methods. If the guide
+  repeats any other method (for example Harvest reforges, Aisling, beastcrafting), a weights
+  placeholder is wrong: treat the odds as a missing number, stop and follow "When numbers are
+  missing", asking for a guide probability (`p_source: guide`) or the user's own
+  (`p_source: user`).
+  The placeholder makes evaluation fail loudly until the user replaces it with a real mod id,
+  a guide number or their own number. To find the mod id from in-game affix text, look in
+  `data/gamedata/mods.json` (run `uv run python scripts/fetch_gamedata.py` first): keys are
+  mod ids and each has `text`, `generation_type` (prefix/suffix) and `groups`. For example,
+  `uv run python -c "import json; m=json.load(open('data/gamedata/mods.json')); print([k for k,v in m.items() if 'maximum Life' in v.get('text','')])"`
+  lists `IncreasedLife...` ids, one per tier. Pick the tier(s) the guide wants, then confirm
+  with the `mod_odds` tool, which takes those ids.
 - `outcomes`: every possible end state of ONE full attempt, failure included. Each has `name`,
   `probability` (greater than 0, at most 1) and exactly one of `trade_url`, `fixed_chaos`
   (use `0` for a total loss) or `use_salvage: true`. The probabilities MUST sum to 1 and
@@ -83,7 +92,8 @@ in double quotes. Never write `verified_patch` as a bare number.
 ## When numbers are missing
 
 Some required numbers have no safe placeholder: outcome probabilities (they must sum to 1),
-`minutes`, material `qty`, and any `p_success` value you would have to make up. If the
+`minutes`, material `qty`, and any `p_success` value you would have to make up (including the
+odds of a repeated step whose method is not chaos, alt, essence or fossil). If the
 guide does not give one of these, do NOT output YAML. Reply instead with a list "Missing
 numbers", one line each (what it is, which step/outcome, why the guide does not give it), and
 ask the user to supply them (their own numbers become `p_source: user` or the missing value).

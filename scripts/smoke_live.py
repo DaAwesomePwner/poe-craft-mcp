@@ -8,8 +8,9 @@ Usage:
     uv run python scripts/smoke_live.py --live --config path/to/config.toml
 
 Makes 2 poe.ninja requests (league list, Currency) and, with --trade-url, a trade search of the
-10 cheapest listings: one search and one listing fetch, plus one more to resolve a saved URL
-whose id does not embed the query. Results land in the normal cache (<data_dir>/cache.db), so a
+10 cheapest listings. For an uncached item search with results that is one search and one
+listing fetch, plus one more to resolve a saved URL whose id does not embed the query
+(exchange searches and searches with no results skip the listing fetch). Results land in the normal cache (<data_dir>/cache.db), so a
 repeat run inside the cache window makes no requests and proves nothing about the live sites.
 Prints a compact summary to stdout and exits 1 on any failure, including when stale cached data
 was served because a live request failed. Prints whether POESESSID is set, never its value.
