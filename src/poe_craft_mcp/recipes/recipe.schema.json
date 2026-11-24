@@ -13,7 +13,7 @@
     "verified_patch": {
       "description": "Quote it in YAML: an unquoted 3.30 is read as the number 3.3.",
       "type": ["string", "null"],
-      "pattern": "^[0-9]+[a-z]?\\.[0-9]+[a-z]?(\\.[0-9]+[a-z]?)?$"
+      "pattern": "^[0-9]+\\.[0-9]+(\\.[0-9]+)?[a-z]?$"
     },
     "sources": { "type": "array", "items": { "type": "string", "minLength": 1 } },
     "requires": { "type": "array", "items": { "type": "string", "minLength": 1 } },

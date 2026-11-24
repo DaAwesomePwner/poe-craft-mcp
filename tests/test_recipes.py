@@ -139,13 +139,21 @@ def test_non_mapping_and_unreadable_files(tmp_path: Path) -> None:
 
 @pytest.mark.parametrize(
     ("text", "expected"),
-    [("3.30", (3, 30, 0)), ("3.30.0", (3, 30, 0)), ("3.29.2", (3, 29, 2)), ("3.9", (3, 9, 0))],
+    [
+        ("3.30", (3, 30, 0)),
+        ("3.30.0", (3, 30, 0)),
+        ("3.29.2", (3, 29, 2)),
+        ("3.9", (3, 9, 0)),
+        ("3.30.1b", (3, 30, 1)),
+    ],
 )
 def test_parse_version(text: str, expected: tuple[int, int, int]) -> None:
     assert parse_version(text) == expected
 
 
-@pytest.mark.parametrize("text", ["3", "v3.30", "3.30.0.1", "latest", ""])
+@pytest.mark.parametrize(
+    "text", ["3", "v3.30", "3.30.0.1", "latest", "", "3a.30b.1c", "3.30b.1", "3a.30", "3.30bb"]
+)
 def test_parse_version_rejects_garbage(text: str) -> None:
     with pytest.raises(ValueError, match="patch version"):
         parse_version(text)
@@ -313,6 +321,18 @@ def test_letter_suffixed_patches_are_accepted(patch: str, tmp_path: Path) -> Non
     path = tmp_path / "r.yaml"
     path.write_text(yaml.safe_dump(data), encoding="utf-8")
     assert parse_recipe_file(path).is_verified
+
+
+@pytest.mark.parametrize("patch", ["3a.30b.1c", "3.30b.1", "3a.30", "3.30.1bb", "3.30.1B"])
+def test_misplaced_or_repeated_letters_are_rejected(patch: str, tmp_path: Path) -> None:
+    data = mutated(verified_patch=patch)
+    assert schema_problems(data)
+    with pytest.raises(ValidationError):
+        Recipe.model_validate(data)
+    path = tmp_path / "r.yaml"
+    path.write_text(yaml.safe_dump(data), encoding="utf-8")
+    store = RecipeStore.load(tmp_path)
+    assert store.recipes == {} and [e.file for e in store.errors] == ["r.yaml"]
 
 
 def test_letter_suffix_is_ignored_when_comparing() -> None:

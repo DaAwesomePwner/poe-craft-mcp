@@ -15,13 +15,13 @@ Probability = Annotated[float, Field(gt=0, le=1, allow_inf_nan=False)]
 Positive = Annotated[float, Field(gt=0, allow_inf_nan=False)]
 NonNegative = Annotated[float, Field(ge=0, allow_inf_nan=False)]
 Text = Annotated[str, Field(min_length=1)]
-_VERSION = re.compile(r"([0-9]+)[a-z]?\.([0-9]+)[a-z]?(?:\.([0-9]+)[a-z]?)?")
+_VERSION = re.compile(r"([0-9]+)\.([0-9]+)(?:\.([0-9]+))?[a-z]?")
 
 
 def parse_version(text: str) -> Version:
     """Parse `3.30`, `3.30.0` or `3.30.1b` into a comparable tuple (so 3.9 < 3.30).
 
-    Letter suffixes on a component are accepted and ignored in comparisons.
+    One optional letter at the very end (`3.30.1b`) is accepted and ignored in comparisons.
     """
     match = _VERSION.fullmatch(text.strip())
     if match is None:
