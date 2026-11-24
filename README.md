@@ -172,6 +172,7 @@ of attempts) still fits your budget.
 | `get_recipe(id)` | One full recipe with its warnings | none |
 | `price_trade_query(trade_url? \| query_json?, sample?)` | p10 / p25 / median in chaos of the cheapest instant-buyout listings of a trade search | trade site (cached 20 min, rate limited) |
 | `mod_odds(base, ilvl, target_mods, method)` | Chance per attempt for chaos, alt, essence or fossil crafting, from RePoE spawn weights, plus attempts for a 90% chance | none (needs game data) |
+| `cluster_combos(base, enchant, passives, ilvl, min_value_div=1, ...)` | Notable pairs on one cluster jewel that sell for at least `min_value_div` divines (instant buyout only), and the chance, EV and profit per attempt of Alteration/Augmentation to any of their notables, then Regal | poe.ninja and trade (needs game data) |
 | `evaluate_recipe(id, price_overrides?)` | Full cost / value / profit breakdown of one recipe, with every input's source and age | poe.ninja and trade |
 | `rank_crafts(budget_div, min_listings?, max_minutes?, risk="medium", limit=5, include_unverified?, tags?)` | Ranks recipes by profit per hour within a budget | poe.ninja and trade |
 | `refresh` | Only when you ask: reload poe.ninja data now instead of waiting out the 15-minute floor. Once per 5 minutes; never touches the trade site | poe.ninja |
