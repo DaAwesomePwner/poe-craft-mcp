@@ -1,0 +1,77 @@
+# Starter recipe from a PRE-3.30 guide (3.28); odds from the RePoE 3.30.0.4.3 export. NOT verified in game.
+id: medium-cluster-minion-life-rebirth
+name: Medium Cluster Jewel (Minion Life, 4 passives), Life from Death + Blessed Rebirth (alt-aug, one regal)
+tags: [cluster, alt, regal, minion, starter]
+status: unverified
+verified_patch: null
+sources:
+  - "https://poeautocraft.com/autocraft-strategy/542bd7d9-da31-4f35-9009-f44e43bd4111/"
+requires: []
+budget_div: 0.1
+base:
+  # Cheapest online white (normal), not corrupted Medium Cluster Jewel with "Minions have 12%
+  # increased maximum Life", "Adds 4 Passive Skills", item level 68-83.
+  trade_url: "https://www.pathofexile.com/trade/search/Covens/H4sIAAAAAAACCnWQ3WrDMAxGX6XoOoyGpMHp7e4Ge4JRiueoTKDYmX-6hZB3n5x1w4Puyrb0nSOjBd4T-hmOC4SoYwr55qZIzsIRnGWyCGsFcZ5QCs84UBp3j5xCRL97wg9kqDZUyJflJ6ftIOULsaS-GzRIGa150zY-5Py56VvV902teoleNScsZzd7mTpQ0K-Mgl40B1yru5696upDV7eH0jOSSNoKRv0p5x3XaT0VP8xAMOfiXVyJr_zr7NRNqhqxGud9mmLWFnvbJsC63hb3j9ZrT3H-A1rnR82ZzGxwPub25MlsWw1GWl8FyXdyswEAAA"
+steps:
+  - action: transmute
+    materials:
+      - { source: ninja, category: Currency, name: "Orb of Transmutation", qty: 1 }
+  - action: alt_aug
+    materials:
+      - { source: ninja, category: Currency, name: "Orb of Alteration", qty: 1 }
+      # Augmentations per cycle = 2.8457 / 12.0802 (mod_odds alt_aug expected_materials).
+      - { source: ninja, category: Currency, name: "Orb of Augmentation", qty: 0.2356 }
+    repeat_until: "the magic jewel shows Life from Death or Blessed Rebirth"
+    p_success:
+      p_source: weights
+      method: alt_aug
+      target_mods: ["AfflictionNotableLifefromDeath_", "AfflictionNotableBlessedRebirth"]
+      base: "Medium Cluster Jewel"
+      ilvl: 75
+      enchant: "Minion Life"
+      passives: 4
+  - action: regal
+    materials:
+      # One Regal per attempt, paid once: a miss is sold (see outcomes), not rerolled.
+      - { source: ninja, category: Currency, name: "Regal Orb", qty: 1 }
+outcomes:
+  - name: "Life from Death + Blessed Rebirth"
+    probability: 0.0183218
+    # Medium, Minion Life enchant, 4 passives, not corrupted, both notables.
+    trade_url: "https://www.pathofexile.com/trade/search/Covens/H4sIAAAAAAACCoWSy2rDMBBFfyVobYptyZGdbXaFfkExQZUVOiBLrh5tjPG_d-SmoECarjSauefO6LGQj6jcTA4L8UGE6FNkpwDWkAOxRoNRZC1ImCeFiRc1QBx3Rx19UG73rL6UJsWGIvm6_OqEGTB9Bo2qnwIMmFZGvgsTnpL-RDvWdh2t2g6ln0JHlfemJXYdwIs3rRA9C-3VWtz1Kdt91ewr1uQ-I6AJK8goLrje8eqT2z_jXiYNEq59akp5zWnJedbn0ZA3dMVqxjvWcPaY7tc-mySdw8tTts9CaZ2LU0hs9mabDVnX66P9wTrhIMw3oLEmGsDvkOCEe-tCUkwO5HZLXmLpG2JSkp0yAgAA"
+  - name: "one of Life from Death / Blessed Rebirth (missed Regal)"
+    probability: 0.9816782
+    # Same jewel with exactly one of the two notables; magic or rare.
+    trade_url: "https://www.pathofexile.com/trade/search/Covens/H4sIAAAAAAACCn2S3WrEIBCFX2XxOpQYzSbZ270r9AlKWKxxqWA09afdEHz3jmkKLk33Sp0535kZxgV9BGFndFqQ88wHl25m8tJodEJGK6kFigXy8yQg8CIGGcbDWQXnhT08iy-hULGiQL4uvzqmBwhfpQLVT0IOEBaavzPtn5L-Qjradh3BbQfST6aCyGuTEqoO0rE3JQC9MuVELHZ9yvaI6yOmde4zSjChBRrZDc4drz65be1yE7T_Q-ONxnFvlNukJJdbDxUhTdWQsmkyl0cD3NGYVrTpaN3Qx3Qf-6yT1KXjl-ydXbmxNkw-sdk-VxsU47bQf1jLrPTzHaiNDlrCV0lwwp2xPikmK_m6cMch9Q21LCrxTgIAAA"
+salvage:
+  # Not used: both end states are sold through the searches above.
+  fixed_chaos: 0
+minutes: 4
+notes: >-
+  Older guide (poeautocraft, 3.28 Mirage, March 2026): check it still holds in 3.30. What you
+  make: a rare Medium Cluster Jewel with the enchant "Added Small Passive Skills grant: Minions
+  have 12% increased maximum Life" and "Adds 4 Passive Skills", carrying both Life from Death
+  and Blessed Rebirth. Buy a white (normal) jewel with that enchant, 4 passives and item level
+  68-83 (Blessed Rebirth needs item level 68; at 84+ extra small-passive mods join the pool and
+  both notables get rarer; the guide buys 75-83). Check it is not corrupted.
+  Steps. (1) Use one Orb of Transmutation to make the white jewel magic. (2) Alteration and
+  Augmentation cycle: use an Orb of Alteration; if the jewel has only a suffix (a small-passive
+  line such as "+3% to Chaos Resistance"), use an Orb of Augmentation to add a prefix; if it has
+  only a prefix that is neither notable, alterate again. Stop as soon as Life from Death or
+  Blessed Rebirth appears; if it appears alone, do not augment. (3) Use one Regal Orb. If it
+  adds the other notable, sell the pair. Otherwise sell the rare one-notable jewel as it is.
+  How the odds are derived (export weights at ilvl 75; ilvl 68-83 have the same pool): all mods
+  weigh 22499, prefixes 11899, suffixes 10600; Life from Death 716, Blessed Rebirth 269. Per
+  cycle one of them appears with chance 0.08278 (mod_odds alt_aug: about 12.1 Alterations and
+  2.85 Augmentations per hit); it is Life from Death 72.7% of the time, Blessed Rebirth 27.3%.
+  The jewel has no suffix 26.4% of the time. The Regal then adds the missing notable with chance
+  0.01235 (Life from Death there, Blessed Rebirth wanted; 0.01287 averaged over the suffix it
+  may carry) or 0.0322 (Blessed Rebirth there; 0.0335 with a suffix), all mod_odds regal.
+  Together 0.0183218 per attempt (the pair outcome, about 1 in 55); the other 0.9816782 is a
+  jewel with one of the two, priced by its own search (it takes the cheaper of the two, so it is
+  conservative). Most of the value is the one-notable sale. Not modelled: the guide scours a
+  miss and starts again (here a miss is sold) and uses an Exalted Orb when the Regal added a
+  suffix and a prefix slot is still open. Minutes (estimate, not from the guide): about 12
+  Alterations at 3 s each (under 1 min), the Regal, plus buying the base and listing (3 min).
+  Verify in game: notable names and item levels, the enchant and passive count on the searches,
+  and that the sale searches show jewels like yours.

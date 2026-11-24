@@ -1,7 +1,8 @@
 # Starter recipes
 
-Three crafts taken from public guides and written as recipe files, so `rank_crafts` has real
-crafts to evaluate. All three are **unverified**: nobody has checked the steps in game, and
+Crafts taken from public guides and written as recipe files, so `rank_crafts` has real crafts
+to evaluate: three flask and wand crafts, and four cluster jewel crafts in
+[Cluster jewels](#cluster-jewels). All of them are **unverified**: nobody has checked the steps in game, and
 they stay hidden from rankings unless you pass `include_unverified=true`. The `notes` of each
 recipe walk through the craft step by step; `get_recipe <id>` shows them.
 
@@ -80,6 +81,122 @@ sale price to rank on. Rerun `evaluate_recipe` later in the league; the searches
 5. Then set `status: verified` and `verified_patch: "3.30.0"` (quoted), per
    [recipes.md](recipes.md#verification).
 
+## Cluster jewels
+
+Four cluster jewel crafts, all with the same shape: buy a white jewel with the right enchant and
+passive count, make it magic, alt-aug until an anchor notable appears, then use **one** Regal
+Orb. A Regal that adds a partner notable gives the pair; a miss leaves a rare one-notable jewel,
+which is sold too. Both end states are sale outcomes with their own trade search; `salvage` is
+unused.
+
+| Recipe id | What you make | Guide (patch) |
+| --- | --- | --- |
+| `medium-cluster-chaos-dot-wicked-pall` | Medium, 12% Chaos DoT, 5 passives: Wicked Pall + Flow of Life, Brush with Death or Student of Decay | [Exile's Foundry](https://exilesfoundry.com/blog/poe-league-start-profit-crafting/) (3.30, M5 Chaos DoT template); pairs from [poeautocraft 3.28](https://poeautocraft.com/autocraft-strategy/3534f924-2610-4dda-8a4f-b29e2001b865/) and [3.29](https://poeautocraft.com/autocraft-strategy/4000-chaos-profit-the-old-school-cluster-crafting-strategy-in-poe-329/) (**pre-3.30**) |
+| `medium-cluster-crit-malice-pressure-points` | Medium, 15% Crit Chance, 4 passives: Overwhelming Malice + Pressure Points | [poeautocraft](https://poeautocraft.com/autocraft-strategy/d15fda9a-bc1b-4ead-9124-cf2f364adf69/) (**pre-3.30**, 3.28) |
+| `medium-cluster-minion-life-rebirth` | Medium, Minion Life, 4 passives: Life from Death + Blessed Rebirth | [poeautocraft](https://poeautocraft.com/autocraft-strategy/542bd7d9-da31-4f35-9009-f44e43bd4111/) (**pre-3.30**, 3.28) |
+| `large-cluster-spell-mage-hunter` | Large, 10% Spell Damage, 8 passives: Mage Hunter + Conjured Wall or Arcane Heroism | [poeautocraft / JJ546](https://poeautocraft.com/blog/2026-11-19-poe-330-crafting-guide-large-spell-damage-clusters/) (3.30, Nov 2026) |
+
+The Large recipe's targets come from the guide's downloadable template: it stops a magic jewel
+on Arcane Heroism, Conjured Wall, Mage Hunter or a suffix notable, and its finished rares are
+Mage Hunter + (Conjured Wall or Arcane Heroism) + a suffix notable (Essence Rush, Thaumophage or
+Sap Psyche). The recipe anchors on Mage Hunter (in every finished target) and stops after the
+Regal, at the two-notable jewel.
+
+### Bases and item level
+
+The enchant decides which notables can roll (RePoE `cluster_jewels.json`); every recipe step
+passes `enchant` and `passives` to `mod_odds`. Item level matters in two ways: the notables need
+68 (Mage Hunter, Overwhelming Malice, Blessed Rebirth, Flow of Life, Brush with Death), and at
+**84+ the pool gains extra small-passive mods** (Medium Chaos DoT prefixes 11900 → 14000,
+suffixes 10600 → 14150), which makes every notable rarer. The pool is identical from 68 to 83
+for the Medium jewels and from 75 to 83 for the Large one, so the base searches take item level
+68-83 (Medium) or 75-83 (Large, as the guide does) and the odds use ilvl 75.
+`evaluate_recipe` warns that the base's real item level is unknown; within those ranges it does
+not change the odds. Bases are white, not corrupted, with the exact enchant and passive count;
+the sale searches use the same enchant and passive count, magic or rare, not corrupted.
+
+### How the odds were derived
+
+Everything comes from the RePoE 3.30.0.4.3 export through `mod_odds`; nothing is guessed.
+
+- **Step 1 (alt_aug)** is a `p_source: weights` step, so the tool computes it on every
+  evaluation. One cycle = an Alteration, plus an Augmentation when the Alteration gave a lone
+  suffix (a lone non-anchor prefix gets the next Alteration instead; a lone anchor is not
+  augmented). The Augmentation quantity per cycle is `augmentation / alteration` from
+  `expected_materials`.
+- **Branch rule.** When step 1 stops, the anchor is either alone (the Alteration gave just the
+  anchor: chance `0.5 x w_anchor / w_all` per cycle) or with one suffix, drawn in proportion to
+  suffix weight. The Regal's chance differs between the two because a suffix blocks its mod
+  group, so both branches are modelled: `mod_odds regal` with `existing_mods: [anchor]`, and
+  with `[anchor, suffix]` for every suffix in the pool, averaged by suffix weight. With two
+  anchors (Crit, Minion) each anchor is weighted by its share of step-1 hits (proportional to
+  its spawn weight).
+- **Step 2 (one Regal)** is paid once (no `repeat_until`); its chance becomes the pair
+  outcome's probability, and 1 minus it the one-notable outcome's.
+
+| Recipe | Step 1 chance per cycle | Alts / Augs per anchor | Anchor alone | Regal chance (alone / with suffix) | Pair outcome |
+| --- | ---: | ---: | ---: | --- | ---: |
+| Chaos DoT, Wicked Pall | 0.02924 | 34.2 / 8.05 | 26.4% | 0.02745 / 0.02859 | 0.0282887 (1 in 35) |
+| Crit, OM or PP | 0.05356 | 18.7 / 4.43 | 26.3% | PP held (72.8%): 0.00782 / 0.00815; OM held (27.2%): 0.0206 / 0.0215 | 0.0116569 (1 in 86) |
+| Minion Life, LfD or BR | 0.08278 | 12.1 / 2.85 | 26.4% | LfD held (72.7%): 0.01235 / 0.01287; BR held (27.3%): 0.0322 / 0.0335 | 0.0183218 (1 in 55) |
+| Large Spell, Mage Hunter | 0.02777 | 36.0 / 9.91 | 22.5% | 0.0464 / 0.0486 | 0.0481352 (1 in 21) |
+
+The Regal hits rarely, so **most of each recipe's value is the one-notable sale**; the pair is
+upside. The one-notable searches take the cheapest comparable jewel (for Crit and Minion, the
+cheaper of the two notables; for Large, a Mage Hunter jewel without either partner, although a
+Mage Hunter + suffix notable is worth more), so the miss values are conservative.
+
+### Live snapshot
+
+`evaluate_recipe` for each recipe and `rank_crafts(budget_div=30, include_unverified=true,
+tags=["cluster"])`, run 2026-11-24 04:09-04:11 UTC, league Covens, 1 divine = 197.7 chaos,
+10 trade listings per search, 5% undercut, `min_listings` 10. All trade searches were fetched
+live in this run (21 trade requests in total); `rank_crafts` reused them from the trade cache.
+The `cluster` tag kept the ranking to these four recipes, so it did not re-query the flask and
+wand searches. Materials from poe.ninja Currency: Alteration 0.2216 c, Augmentation 0.249 c,
+Regal 0.3155 c, Transmutation 0.0406 c. Chaos values; C = expected cost of one attempt,
+C90 = cost of a bad (90th percentile) run, V = expected value.
+
+| Recipe | Base (p25, listings) | C | C90 | V | Profit | Profit/hr | One-notable sale (p25, listings) | Pair sale | Rankable |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- |
+| `medium-cluster-chaos-dot-wicked-pall` | 1 c (10) | 10.9 | 23.2 | 5.3 | -5.6 | -68 | 5.75 c (4) | **0 online listings** | **no** |
+| `medium-cluster-crit-malice-pressure-points` | 1 c (10) | 6.6 | 13.1 | 5.6 | -1.0 | -14 | 6 c (9) | **0 online listings** | **no** |
+| `medium-cluster-minion-life-rebirth` | 1 c (10) | 4.7 | 8.9 | 9.1 | 4.4 | 65 | 9.75 c (8) | **0 online listings** | **no** |
+| `large-cluster-spell-mage-hunter` | 3 c (6) | 13.8 | 27.1 | 78.6 | 64.8 | 778 | 86.9 c (**2**) | **0 online listings** | **no** |
+
+`rank_crafts` returned no items: each recipe was excluded because its pair search had no usable
+listings (the pair is valued at 0, so V and profit above count only the one-notable sale). The
+searches themselves work: the Crit pair search, run once with offline sellers included, found
+30 listings, so the market was simply thin at 04:10 UTC with online-only status. Every
+one-notable search also had fewer than 10 online listings (the Large one on 2), so none of the
+profits above is meaningful yet. poe.ninja's ClusterJewel overview at the same time priced these white bases
+higher than the cheapest trade listings (for example 15 c for 5-passive Chaos DoT and 10 c for
+4-passive Crit, ilvl 75-83, and 6.6 c for 8-passive Spell Damage), so the 1-3 c trade bases may be
+too good to last. Rerun `evaluate_recipe` at a busier hour; the searches are live.
+
+### Not modelled
+
+- **Exalted Orb finishes.** The guides use an Exalted Orb when the Regal added a suffix and a
+  prefix slot is still open (Medium), and to add the third notable (Large). A step that runs
+  only on one branch cannot be expressed, so it is left out (upside the numbers ignore).
+- **Scour and redo.** The guides scour a missed Regal and start again; these recipes sell the
+  miss instead, which the tool can price.
+- **Other anchors.** The guides stop on several notables (for Chaos DoT, any of the seven pairs:
+  Eldritch Inspiration + Low Tolerance, Low Tolerance + Wasting Affliction, Brush with Death +
+  Flow of Life, Brewed for Potency + Low Tolerance, and the Wicked Pall pairs). One recipe has
+  one sale search per outcome, so each recipe models one anchor set.
+
+### What to verify in game
+
+1. The notable names, that they appear on the jewel with this enchant and passive count, and the
+   item levels (68 for the notables named above; the jewel's "Item Level", not "Requires Level").
+2. That a Medium jewel with 4 or 5 passives and a Large with 8 can hold the pairs (the guides say
+   so; the trade searches find them).
+3. Open each trade URL: the base search should show white jewels with the right enchant and
+   passive count; the sale searches should show jewels you would sell against.
+4. Time one attempt and replace `minutes`.
+5. Then set `status: verified` and `verified_patch: "3.30.0"` (quoted).
+
 ## Researched but not added
 
 - **Righteous Fire rings and gloves** ([pohx.net rings](https://pohx.net/crafts/rings/),
@@ -90,8 +207,9 @@ sale price to rank on. Rerun `evaluate_recipe` later in the league; the searches
   res, dexterity"), while `mod_odds` gives the chance of at least one target, and the sale value
   depends on that whole combination. Modelling them honestly needs fractured-mod support in
   `mod_odds`.
-- **Cluster jewels**: Alteration odds are not modelled for cluster jewels (domain
-  `affliction_jewel`).
+- **Cluster jewel Exalted Orb finishes and other anchors**: see [Not modelled](#not-modelled)
+  under Cluster jewels.
 - **Harvest reforges, beastcrafting, Rog, Gwennen**: no published per-attempt odds, and
-  `mod_odds` supports only chaos, alteration, essence and fossil methods.
+  `mod_odds` supports only chaos, alteration (alone or with Augmentation), Regal, essence and
+  fossil methods.
 - **Elder Stygian Vise**: influence mods are not modelled by `mod_odds`.

@@ -1,0 +1,83 @@
+# Starter recipe from a 3.30 guide; odds from the RePoE 3.30.0.4.3 export. NOT verified in game.
+id: large-cluster-spell-mage-hunter
+name: Large Cluster Jewel (Spell Damage, 8 passives), Mage Hunter + Conjured Wall or Arcane Heroism (alt-aug, one regal)
+tags: [cluster, alt, regal, starter]
+status: unverified
+verified_patch: null
+sources:
+  - "https://poeautocraft.com/blog/2026-11-19-poe-330-crafting-guide-large-spell-damage-clusters/"
+requires: []
+budget_div: 0.2
+base:
+  # Cheapest online white (normal), not corrupted Large Cluster Jewel with "10% increased Spell
+  # Damage", "Adds 8 Passive Skills", item level 75-83.
+  trade_url: "https://www.pathofexile.com/trade/search/Covens/H4sIAAAAAAACCnWQwU7DMAyGX2XyuUKruo52V26IN0DTZFIPIqVJcZJBVeXdcQpDQRqnJPb_fY68wHsknuGwgA8Yos83NwXtLBzAWaMtQaogzBNJ4Qn5lTYPJvpAvHmkDzJQraSAz8s1hnaQ8lkbSX039CBlsuoNbbjL-VPT77q-b-qul-gFTaRydL2VoYP2-GJI0DMaT6m66dl2-7rd17u29IxaJF0FI37KecN1TMfihxnw6lS8i6s2F_PrvG-v0kasyjHHKWRtsbZ1AqT0s7d_tIysw_wHtI5HNJnMrHcccntirdateiWtL7OiO_iyAQAA"
+steps:
+  - action: transmute
+    materials:
+      - { source: ninja, category: Currency, name: "Orb of Transmutation", qty: 1 }
+  - action: alt_aug
+    materials:
+      - { source: ninja, category: Currency, name: "Orb of Alteration", qty: 1 }
+      # Augmentations per cycle = 9.9072 / 36.0071 (mod_odds alt_aug expected_materials).
+      - { source: ninja, category: Currency, name: "Orb of Augmentation", qty: 0.2751 }
+    repeat_until: "the magic jewel shows 1 Added Passive Skill is Mage Hunter"
+    p_success:
+      p_source: weights
+      method: alt_aug
+      target_mods: ["AfflictionNotableMageHunter___"]
+      base: "Large Cluster Jewel"
+      ilvl: 75
+      enchant: "Spell Damage"
+      passives: 8
+  - action: regal
+    materials:
+      # One Regal per attempt, paid once: a miss is sold (see outcomes), not rerolled.
+      - { source: ninja, category: Currency, name: "Regal Orb", qty: 1 }
+outcomes:
+  - name: "Mage Hunter + Conjured Wall or Arcane Heroism"
+    probability: 0.0481352
+    # Large, Spell Damage enchant, 8 passives, not corrupted, Mage Hunter and at least one of
+    # Conjured Wall / Arcane Heroism (listings with a third notable also match).
+    trade_url: "https://www.pathofexile.com/trade/search/Covens/H4sIAAAAAAACCoWSzU7DMBCEX6XyOUJx40R2r9wQb4CqyjgurOTawT_QKMq7sw5FMiKQS-Ks55sZKTuRt6T9SA4TCVHGFPLJDRGcJQfirAGryVyROA4aB4_Sv-jdvUkhar970B_akGohEXyavmXS9jg-g0HV1wX0ONZWvUob77L-1AjGhWgoFyh9lybpMprWGNpDkM9GI3qWJui5WvWpeUfbjrK29LkAmvCKXOQV3ytex-y2Ufc6GFBwy9lTyruOUcaKnA1j5ZKNv2rReTOM0bqtG9oy_n9YtUo3oqZC7PGxVfVYNMntgjoV38VROe_TEDNb7MdiQ-b5tiB_sF56iOMP0DqbLODqZTjjwfmYFYMHtfySoPDqE1qO2kaeAgAA"
+  - name: "Mage Hunter without Conjured Wall or Arcane Heroism (missed Regal)"
+    probability: 0.9518648
+    # Same jewel with Mage Hunter and neither of the two; magic or rare.
+    trade_url: "https://www.pathofexile.com/trade/search/Covens/H4sIAAAAAAACCoWS3WrDMAyFX6X4Ooy4cYLd292VvcEoxXPcTeDamX-2hpB3n5x14EG23NiydL4jYTSR96T9SA4TCVHGFHLkhgjOkgNx1oDVZK5IHAeNiSfpX_Xu0aQQtd8d9ac2pFpIBJ-nH5m0PaYvYFD1XYAe09qqN2njQ9afG8G4EA3lAqUf0iRdtqY1Nu0hyBejEb1IE_RcrfrUvKNtR1lb-lwBTXhFrvKG94rXKbttjHsbDCi499lTyruOUcaKPhvG1sVtY0brtm5oy_j_xtUq3YiaCrHHY2usUzFJ_qCgzsW7CJXzPg0xs8UuLDZknu_L8AfrpYc4_gKts8kCrlmGMx6cj1kxeFDL9weFpS9xbfN2igIAAA"
+salvage:
+  # Not used: both end states are sold through the searches above.
+  fixed_chaos: 0
+minutes: 5
+notes: >-
+  What you make: a rare Large Cluster Jewel with the enchant "Added Small Passive Skills grant:
+  10% increased Spell Damage" and "Adds 8 Passive Skills", carrying Mage Hunter plus Conjured
+  Wall or Arcane Heroism. The guide (poeautocraft / JJ546, 3.30, November 2026) goes further:
+  Alteration-Augmentation-Regal-Exalt to a three-notable jewel (its template's finished jewels
+  are Mage Hunter + Conjured Wall or Arcane Heroism + one of the suffix notables Essence Rush,
+  Thaumophage or Sap Psyche). The Exalted Orb step is not modelled here; this recipe stops at
+  the two-notable jewel after one Regal, which is the guide's half-way point. Buy a white
+  (normal) jewel with that enchant, 8 passives and item level 75-83, as the guide does (Mage
+  Hunter needs item level 68; at 84+ extra small-passive mods join the pool and the notables get
+  rarer). Check it is not corrupted.
+  Steps. (1) Use one Orb of Transmutation to make the white jewel magic. (2) Alteration and
+  Augmentation cycle: use an Orb of Alteration; if the jewel has only a suffix, use an Orb of
+  Augmentation to add a prefix; if it has only a prefix that is not Mage Hunter, alterate again.
+  Stop as soon as "1 Added Passive Skill is Mage Hunter" appears; if it appears alone, do not
+  augment. (The guide also stops on Conjured Wall, Arcane Heroism or a suffix notable; this
+  recipe stops on Mage Hunter only, the notable all of the guide's finished jewels share.)
+  (3) Use one Regal Orb. If it adds Conjured Wall or Arcane Heroism, sell the pair (or, beyond
+  this recipe, exalt for a suffix notable). Otherwise sell the rare Mage Hunter jewel.
+  How the odds are derived (export weights at ilvl 75; ilvl 75-83 have the same pool): all mods
+  weigh 22499, prefixes 10118, suffixes 12381; Mage Hunter 281, Conjured Wall 750, Arcane
+  Heroism 281. Per cycle Mage Hunter appears with chance 0.02777 (mod_odds alt_aug: about 36.0
+  Alterations and 9.91 Augmentations per Mage Hunter). It comes alone 22.5% of the time; then a
+  Regal adds Conjured Wall or Arcane Heroism with chance 0.0464 (mod_odds regal). Otherwise the
+  jewel also has a suffix (drawn in proportion to suffix weight, which can be a suffix
+  notable); averaged over those suffixes the Regal's chance is 0.0486. Together 0.0481352 per
+  attempt (about 1 in 21); the other 0.9518648 is a Mage Hunter jewel without either partner,
+  priced by its own search (a Mage Hunter + suffix-notable jewel is worth more than that search
+  says, so the miss value is conservative). Not modelled: the Exalted Orb finish, and
+  scouring a miss to start again. Minutes (estimate, not from the guide): about 36 Alterations
+  at 3 s each (2 min), the Regal, plus buying the base and listing (3 min). Verify in game:
+  notable names, item levels and which are prefixes, the enchant and passive count on the
+  searches, and that the sale searches show jewels you would really sell against.

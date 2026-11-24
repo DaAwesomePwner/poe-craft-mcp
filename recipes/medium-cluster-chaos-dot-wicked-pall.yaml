@@ -1,0 +1,85 @@
+# Starter recipe from 3.28-3.30 guides; odds from the RePoE 3.30.0.4.3 export. NOT verified in game.
+id: medium-cluster-chaos-dot-wicked-pall
+name: Medium Cluster Jewel (Chaos DoT, 5 passives), Wicked Pall + a partner notable (alt-aug, one regal)
+tags: [cluster, alt, regal, starter]
+status: unverified
+verified_patch: null
+sources:
+  - "https://exilesfoundry.com/blog/poe-league-start-profit-crafting/"
+  - "https://poeautocraft.com/autocraft-strategy/3534f924-2610-4dda-8a4f-b29e2001b865/"
+  - "https://poeautocraft.com/autocraft-strategy/4000-chaos-profit-the-old-school-cluster-crafting-strategy-in-poe-329/"
+requires: []
+budget_div: 0.2
+base:
+  # Cheapest online white (normal), not corrupted Medium Cluster Jewel with "12% increased Chaos
+  # Damage over Time", "Adds 5 Passive Skills", item level 68-83.
+  trade_url: "https://www.pathofexile.com/trade/search/Covens/H4sIAAAAAAACCnWQ3WrDMAxGX6XoOoyFNMHu7e4Ge4JRiueoTODYqX-6heB3n5x1w4Puyrb0nSOjFS4J_QKHFUJUMYVyc3MkZ-EAzhqyCLmBuMzIhRccKU27J5NCRL97xg800Gwok6_rT07ZkctnMpz6btDIZbT6Xdn4UPKnTu6FlF0rJEevyiSsZ7eSp44U1JtBRs_KBMzNXc-jGNp-aPd97ZmIJX0Dk_rk847rmI_VDwsQ9Kl6V1cyV_PrHMRNKjq2aud9mmPRVnvbJkDOt8X9o_XKU1z-gNb5SZlCFjY4H0t79qS3rQbNrS-RsOvcswEAAA"
+steps:
+  - action: transmute
+    materials:
+      - { source: ninja, category: Currency, name: "Orb of Transmutation", qty: 1 }
+  - action: alt_aug
+    materials:
+      - { source: ninja, category: Currency, name: "Orb of Alteration", qty: 1 }
+      # Augmentations per cycle = 8.0549 / 34.1954 (mod_odds alt_aug expected_materials).
+      - { source: ninja, category: Currency, name: "Orb of Augmentation", qty: 0.2356 }
+    repeat_until: "the magic jewel shows 1 Added Passive Skill is Wicked Pall"
+    p_success:
+      p_source: weights
+      method: alt_aug
+      target_mods: ["AfflictionNotableWickedPall_"]
+      base: "Medium Cluster Jewel"
+      ilvl: 75
+      enchant: "Chaos Damage over Time"
+      passives: 5
+  - action: regal
+    materials:
+      # One Regal per attempt, paid once: a miss is sold (see outcomes), not rerolled.
+      - { source: ninja, category: Currency, name: "Regal Orb", qty: 1 }
+outcomes:
+  - name: "Wicked Pall + Flow of Life, Brush with Death or Student of Decay"
+    probability: 0.0282887
+    # Medium, Chaos DoT enchant, 5 passives, not corrupted, Wicked Pall and at least one of
+    # Flow of Life / Brush with Death / Student of Decay (the guides' Wicked Pall pairs).
+    trade_url: "https://www.pathofexile.com/trade/search/Covens/H4sIAAAAAAACCp2SzWrEIBSFX2VwHYpGY-Jsuyv0CcowWONQwWjqTzsh5N2r6RQsTRvoSr2e7xwv3hm8RukmcJyBDzxEn3d2DMoacATWaGUkWCoQplGmwqPsVRwO9zr6IN3hQb5LDaoVTeTT_KXjpk_li9JJ9Xmh-lSWRrxwE-6y_owZ6RjDqGNJ-sZ1lGU2Yim1V54_a5nQC9deLtWmD-woaigiTekzqGTSVGDg17RueJ2y285zr6NWQt1yEEW0xYQSUuTsGAsbTfjxLLTshtW4gQTDGjV_h1XbNIOww7hl9X9oXMOa0hYxuNfoqegj9-bFuTgXW2Gdi2PIbDFeqw1Yltt8_cI67lSYvoHGmmhUmtwMZ9xbF7JidEqsH-pFuvoAIt3kmN0CAAA"
+  - name: "Wicked Pall without a partner (missed Regal)"
+    probability: 0.9717113
+    # Same jewel with Wicked Pall and none of the three partners; magic or rare (a buyer
+    # compares a missed rare with the cheaper magic Wicked Pall jewels).
+    trade_url: "https://www.pathofexile.com/trade/search/Covens/H4sIAAAAAAACCp2SzWrEIBRGX2VwHYpGY-JsZ1foE5RhsMahgtHUn3ZCyLtX0ylYSBvoKub6nXM1uTN4i9JN4DgDH3iIPq_sGJQ14Ais0cpIsFQgTKNMhSfZqzgcTjr6IN3hUX5IDaoVTeTz_J3jpk_lq9Ip9bWh-lSWRrxyEx5y_oIZ6RjDqGMp-s51lGVvxFLXXnn-omVCr1x7uVSbHthR1FBEmtIzqCRpKjDwW3puuM7ZtnPc26iVUPc-iCLaYkIJKfrsiI0N--IaN5BgWKPmb3G1TTMIO4xbVv-HxjWsKW0Rg3uXOhf3yJ_Xi0vxXiyFdS6OIbPFKK0asCz3WfqFddypMP0AjTXRqDSlGc64ty7kxOiUWH-eF2nrE8gQL3fJAgAA"
+salvage:
+  # Not used: both end states are sold through the searches above.
+  fixed_chaos: 0
+minutes: 5
+notes: >-
+  What you make: a rare Medium Cluster Jewel whose enchant reads "Added Small Passive Skills
+  grant: 12% increased Chaos Damage over Time", with "Adds 5 Passive Skills", carrying the
+  notable Wicked Pall plus one of Flow of Life, Brush with Death or Student of Decay. These
+  three pairs are the Wicked Pall pairs in the guides (poeautocraft for 3.28 and 3.29, both
+  pre-3.30; Exile's Foundry for 3.30 lists Flow of Life + Wicked Pall). Buy a white (normal)
+  jewel with that enchant, 5 passives and item level 68-83 (the Flow of Life and Brush with
+  Death notables need item level 68; at 84+ extra small-passive mods join the pool and every
+  notable gets rarer, so 75-83 is what the guides buy). Check it is not corrupted. Steps. (1)
+  Use one Orb of Transmutation to make the white jewel magic. (2) Alteration and Augmentation
+  cycle: use an Orb of Alteration; if the jewel now has only a suffix (a small-passive line such
+  as "+2% to all Elemental Resistances"), use an Orb of Augmentation to add a prefix; if it has
+  only a prefix that is not Wicked Pall, alterate again (an Augmentation would only add a
+  suffix). Stop as soon as "1 Added Passive Skill is Wicked Pall" appears; if it appears alone,
+  do not augment. (3) Use one Regal Orb. If it adds Flow of Life, Brush with Death or Student of
+  Decay, sell the pair. Otherwise you have a rare Wicked Pall jewel: sell it as it is. How the
+  odds are derived (export weights at ilvl 75; ilvl 68-83 have the same pool): all mods weigh
+  22500, prefixes 11900, suffixes 10600; Wicked Pall 348; the three partners 130 (Flow of Life)
+  + 130 (Brush with Death) + 348 (Student of Decay) = 608. Per cycle Wicked Pall appears with
+  chance 0.02924 (mod_odds alt_aug: about 34.2 Alterations and 8.05 Augmentations per Wicked
+  Pall). It comes alone (no suffix) 26.4% of the time; then a Regal hits a partner with chance
+  0.02745 (mod_odds regal, existing Wicked Pall). Otherwise the jewel also has a suffix, drawn
+  in proportion to suffix weight; the Regal's chance averaged over those suffixes is 0.02859
+  (mod_odds regal with each suffix, weighted). Together 0.264 x 0.02745 + 0.736 x 0.02859 =
+  0.0282887 per attempt (the pair outcome); the other 0.9717113 is a Wicked Pall jewel without a
+  partner, priced by its own search. Not modelled: the guides scour a miss and start again (here
+  a miss is sold), and when the Regal added a suffix (a prefix slot is still open) they use an
+  Exalted Orb for a second notable (cheap upside the numbers leave out). Minutes (estimate, not
+  from a guide): about 34 Alterations at 3 s each (2 min), the Regal, plus buying the base and
+  listing (3 min). Verify in game: the notable names and item levels, that the enchant and
+  passive count match the searches, and that the two sale searches show jewels you would really
+  sell against.
