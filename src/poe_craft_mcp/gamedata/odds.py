@@ -167,7 +167,8 @@ def mod_odds(
             f"no hit in {estimate.samples} Monte Carlo samples; the chance is unresolved and "
             f"below {estimate.upper_bound_95:.2e} per attempt (95% one-sided bound)"
         )
-    warnings[:0] = [*data.load_warnings, *([data.stale_warning] if data.stale_warning else [])]
+    if data.stale_warning:
+        warnings.insert(0, data.stale_warning)
     return {
         "base": {"id": item.id, "name": item.name, "item_class": item.item_class},
         "ilvl": ilvl,

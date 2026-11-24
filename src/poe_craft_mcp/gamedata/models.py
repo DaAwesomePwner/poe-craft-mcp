@@ -74,7 +74,6 @@ class GameData:
     game_version: str | None
     downloaded_at: datetime | None
     source_url: str
-    load_warnings: tuple[str, ...] = ()
 
     @property
     def stale_warning(self) -> str | None:

@@ -26,7 +26,7 @@ from poe_craft_mcp.gamedata.publish import (
     clean_work_dirs,
     fetch_lock,
     publish,
-    recover_previous,
+    recover_layout,
 )
 
 __all__ = ["MAX_FILE_BYTES", "FetchError", "fetch_export"]
@@ -74,12 +74,12 @@ def fetch_export(
 ) -> dict[str, Any]:
     """Download, validate and publish the export to `target`; return the manifest written."""
     with fetch_lock(target):
-        recover_previous(target)
-        clean_work_dirs(target)
+        recover_layout(target)
         staging = Path(tempfile.mkdtemp(dir=target.parent, prefix=f"{target.name}.staging-"))
         try:
             manifest = _download_all(staging, user_agent, client, max_bytes)
             publish(staging, target)
+            clean_work_dirs(target)
         except httpx.HTTPError as exc:
             raise FetchError(f"download failed: {exc}") from exc
         finally:

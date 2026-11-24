@@ -3,9 +3,11 @@
 Layout next to `<data_dir>/gamedata`:
 - `gamedata.fetch.lock`: held for a whole fetch. If no fetch is running (e.g. one was killed),
   delete it by hand.
-- `gamedata.previous`: the export replaced by the last fetch. If a fetch dies between moving
-  `gamedata` aside and moving the new export in, `recover_previous` restores it.
-- `gamedata.staging-*` / `gamedata.discard-*`: per-run work dirs, removed by the next fetch.
+- `gamedata.previous`: the export replaced by the last fetch. If a fetch dies mid-publish, the
+  next fetch's `recover_layout` restores `gamedata` and `gamedata.previous` before deleting
+  anything. The MCP loader never moves directories.
+- `gamedata.staging-*` / `gamedata.discard-*`: per-run work dirs, removed only after a later
+  fetch has published successfully.
 """
 
 from __future__ import annotations
@@ -34,18 +36,27 @@ def lock_path(target: Path) -> Path:
     return target.with_name(target.name + ".fetch.lock")
 
 
-def recover_previous(target: Path) -> str | None:
-    """Restore `gamedata.previous` if `gamedata` is missing; return a warning when it did."""
+def recover_previous(target: Path) -> None:
+    """Restore `gamedata.previous` if `gamedata` is missing. Call only while holding the lock."""
     previous = previous_dir(target)
-    if target.exists() or not previous.is_dir():
-        return None
-    previous.rename(target)
-    message = (
-        f"restored the previous game data export from {previous.name} after an interrupted "
-        "fetch; re-run `uv run python scripts/fetch_gamedata.py` to update it"
+    if not target.exists() and previous.is_dir():
+        previous.rename(target)
+        log.warning("restored %s from %s after an interrupted fetch", target.name, previous.name)
+
+
+def recover_layout(target: Path) -> None:
+    """Undo a half-finished publish before anything is deleted. Call only while holding the lock.
+
+    Restores `gamedata` from `gamedata.previous`, then refills `gamedata.previous` from the
+    newest displaced `gamedata.discard-*` backup if it is missing."""
+    recover_previous(target)
+    previous = previous_dir(target)
+    discards = sorted(
+        target.parent.glob(f"{target.name}.discard-*"), key=lambda p: p.stat().st_mtime
     )
-    log.warning(message)
-    return message
+    if discards and not previous.exists():
+        discards[-1].rename(previous)
+        log.warning("restored %s from %s", previous.name, discards[-1].name)
 
 
 @contextmanager
@@ -67,7 +78,7 @@ def fetch_lock(target: Path) -> Iterator[None]:
 
 
 def clean_work_dirs(target: Path) -> None:
-    """Remove staging/discard dirs left by earlier runs. Call only while holding the lock."""
+    """Remove staging/discard leftovers. Call only under the lock, after a successful publish."""
     for prefix in (".staging-", ".discard-"):
         for leftover in target.parent.glob(f"{target.name}{prefix}*"):
             shutil.rmtree(leftover, ignore_errors=True)

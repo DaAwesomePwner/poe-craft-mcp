@@ -251,7 +251,11 @@ def test_interrupt_between_renames_restores_previous_export(
     assert json.loads((target / "manifest.json").read_text(encoding="utf-8"))["marker"] == "old"
 
 
-def test_hard_kill_between_renames_is_recovered_by_loader_and_fetch(
+def _marker(path: Path) -> str | None:
+    return json.loads((path / "manifest.json").read_text(encoding="utf-8")).get("marker")
+
+
+def test_hard_kill_between_renames_is_recovered_by_fetch_not_loader(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     target = _copy_export(tmp_path / "gamedata", {"game_version": "3.30.0", "marker": "old"})
@@ -262,19 +266,49 @@ def test_hard_kill_between_renames_is_recovered_by_loader_and_fetch(
     monkeypatch.undo()
     assert not target.exists() and previous_dir(target).is_dir()
 
-    lock_path(target).write_text("stale", encoding="utf-8")
-    with pytest.raises(GameDataError, match="fetch is in progress"):
+    with pytest.raises(GameDataError, match=r"fetch_gamedata\.py"):
         load_gamedata(target)
-    lock_path(target).unlink()
-    restored = load_gamedata(target)
-    assert restored.game_version == "3.30.0"
-    assert "restored the previous" in restored.load_warnings[0]
-    assert not previous_dir(target).exists()
+    assert not target.exists() and previous_dir(target).is_dir(), "loader must not move dirs"
 
-    target.rename(previous_dir(target))
     with pytest.raises(FetchError, match="500"):
         _fetch(target, fail="mods")
-    assert json.loads((target / "manifest.json").read_text(encoding="utf-8"))["marker"] == "old"
+    assert _marker(target) == "old"
+
+
+def test_loader_refuses_while_fetch_lock_exists(tmp_path: Path) -> None:
+    target = _copy_export(tmp_path / "gamedata", {"game_version": "3.30.0"})
+    lock_path(target).write_text("pid 1", encoding="utf-8")
+    with pytest.raises(GameDataError, match="fetch is in progress or was interrupted"):
+        load_gamedata(target)
+    lock_path(target).unlink()
+    assert load_gamedata(target).game_version == "3.30.0"
+
+
+def test_cancelled_refresh_keeps_older_backup_until_a_publish_succeeds(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    target = _copy_export(tmp_path / "gamedata", {"game_version": "3.30.0", "marker": "current"})
+    _copy_export(previous_dir(target), {"game_version": "3.29.0", "marker": "older"})
+
+    def cancelled(staging: Path, dest: Path) -> None:
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(publish_module, "_swap_in", cancelled)
+    with pytest.raises(KeyboardInterrupt):
+        _fetch(target)
+    monkeypatch.undo()
+    assert _marker(target) == "current" and not previous_dir(target).exists()
+    (discard,) = tmp_path.glob("gamedata.discard-*")
+    assert _marker(discard) == "older"
+
+    with pytest.raises(FetchError, match="500"):
+        _fetch(target, fail="mods")
+    assert _marker(target) == "current" and _marker(previous_dir(target)) == "older"
+    assert _work_dirs(tmp_path) == []
+
+    _fetch(target)
+    assert _marker(target) is None and _marker(previous_dir(target)) == "current"
+    assert _work_dirs(tmp_path) == []
 
 
 def _raise_kill() -> None:
