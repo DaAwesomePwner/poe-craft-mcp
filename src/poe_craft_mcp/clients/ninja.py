@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from poe_craft_mcp.clients.ninja_history import SnapshotLedger, worth_bulk_recording
+from poe_craft_mcp.clients.ninja_history import SnapshotLedger, body_version, worth_bulk_recording
 from poe_craft_mcp.clients.ninja_models import (
     ALL_TYPES,
     Dataset,
@@ -114,14 +114,15 @@ class NinjaClient:
 
         peek = await self.ctx.cache.get(key)
         memo = self._rows.get(key)
-        same_body = peek is not None and memo is not None and memo[0] == peek.etag
+        peek_version = body_version(peek) if peek is not None else None
+        same_body = memo is not None and memo[0] == peek_version
         if (
             peek is not None
             and memo is not None
             and same_body
             and peek.age_seconds < self._interval_s
         ):
-            return self._ready(base, memo[1], peek.age_seconds, False, peek.etag)
+            return self._ready(base, memo[1], peek.age_seconds, False, peek_version)
         try:
             result = await self._get(url, params)
         except FetchError as exc:
@@ -135,15 +136,15 @@ class NinjaClient:
             payload = result.data if isinstance(result.data, dict) else {}
             normalize = normalize_exchange if kind == "exchange" else normalize_stash
             rows = normalize(payload, type_name)
-        etag = peek.etag if peek is not None and result.from_cache else None
-        if not result.from_cache:  # a fresh 200: the stored body now carries the new ETag
+        version = peek_version if result.from_cache else None
+        if not result.from_cache:  # a fresh 200: identify the body just stored
             stored = await self.ctx.cache.get(key)
-            etag = stored.etag if stored is not None else None
-        if etag is not None:
-            self._rows[key] = (etag, rows)
+            version = body_version(stored) if stored else None
+        if version is not None:
+            self._rows[key] = (version, rows)
         if not rows:
             self._warn_once(key, "poe.ninja type %s returned no lines", type_name)
-        ds = self._ready(base, rows, result.age_seconds, result.stale, etag, at=clock())
+        ds = self._ready(base, rows, result.age_seconds, result.stale, version, at=clock())
         if not result.from_cache:
             await self.ledger.record(ds, [r for r in rows if worth_bulk_recording(ds, r)])
         return ds

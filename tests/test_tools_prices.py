@@ -204,3 +204,11 @@ async def test_get_prices_records_the_rows_it_returns(ctx: AppContext) -> None:
     assert data["rows"][0]["volume_or_listings"] == 11
     snaps = await ctx.cache.get_snapshots("Covens", "ninja:BaseType", "imperial-bow-86-hunter")
     assert [s.chaos for s in snaps] == [2.0]
+
+
+async def test_get_prices_with_repeated_names_snapshots_once(ctx: AppContext) -> None:
+    item = "imperial-bow-86-hunter"
+    async with session(ctx) as client:
+        data = await call(client, "get_prices", category="BaseType", names=[item, item])
+    assert len(data["rows"]) == 2
+    assert len(await ctx.cache.get_snapshots("Covens", "ninja:BaseType", item)) == 1

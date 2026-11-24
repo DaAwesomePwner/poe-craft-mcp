@@ -72,9 +72,10 @@ class NinjaApi:
                 return httpx.Response(endpoint.status)
             if endpoint.body == GARBLED:
                 return httpx.Response(200, content=b"<html>maintenance</html>")
-            if request.headers.get("If-None-Match") == endpoint.etag:
+            if endpoint.etag and request.headers.get("If-None-Match") == endpoint.etag:
                 return httpx.Response(304)
-            return httpx.Response(200, json=endpoint.body, headers={"ETag": endpoint.etag})
+            headers = {"ETag": endpoint.etag} if endpoint.etag else {}
+            return httpx.Response(200, json=endpoint.body, headers=headers)
 
         return handler
 
@@ -84,7 +85,10 @@ class NinjaApi:
     def change(self, name: str, body: Any) -> None:
         endpoint = self.endpoints[name]
         endpoint.body = body
-        endpoint.etag = endpoint.etag + "x"
+        endpoint.etag = endpoint.etag + "x" if endpoint.etag else ""
+
+    def drop_etag(self, name: str) -> None:
+        self.endpoints[name].etag = ""
 
     def garble(self, name: str) -> None:
         self.endpoints[name].body = GARBLED
@@ -437,3 +441,80 @@ async def test_warm_lookups_do_not_renormalize_the_body(
     clock.advance(INTERVAL + 1)
     assert await ninja.find_base("Astral Plate", ilvl_min=84) is not None
     assert calls == 2
+
+
+def with_bow_price(chaos: float) -> dict[str, Any]:
+    body = load("stash_basetype.json")
+    for line in body["lines"]:
+        if line["detailsId"] == "imperial-bow-86-hunter":
+            line["chaosValue"] = chaos
+    return body
+
+
+async def test_changed_quote_is_snapshotted_when_the_server_sends_no_etag(
+    ninja: NinjaClient, api: NinjaApi, ctx: AppContext, clock: FakeClock
+) -> None:
+    api.drop_etag("BaseType")
+    item = "imperial-bow-86-hunter"
+    assert await ninja.find_base("Imperial Bow", ilvl_min=86, influence="Hunter")
+    api.change("BaseType", with_bow_price(5.0))
+    clock.advance(INTERVAL + 1)
+    quote = await ninja.find_base("Imperial Bow", ilvl_min=86, influence="Hunter")
+    assert quote is not None and quote["chaos"] == 5.0
+    snaps = await ctx.cache.get_snapshots("Covens", "ninja:BaseType", item)
+    assert [s.chaos for s in snaps] == [2.0, 5.0]
+
+
+async def test_warm_lookups_do_not_renormalize_without_etag(
+    ninja: NinjaClient, api: NinjaApi, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    api.drop_etag("BaseType")
+    calls = 0
+    original = ninja_module.normalize_stash
+
+    def counting(payload: Any, type_name: str) -> Any:
+        nonlocal calls
+        calls += 1
+        return original(payload, type_name)
+
+    monkeypatch.setattr(ninja_module, "normalize_stash", counting)
+    for _ in range(3):
+        assert await ninja.find_base("Astral Plate", ilvl_min=84) is not None
+    assert calls == 1
+
+
+async def test_duplicate_rows_in_one_batch_are_snapshotted_once(
+    ninja: NinjaClient, ctx: AppContext
+) -> None:
+    ds = await ninja.dataset("BaseType")
+    row = next(r for r in ds.rows if r["id"] == "imperial-bow-86-hunter")
+    await ninja.record(ds, [row, row, dict(row)])
+    await ninja.record(ds, [row])
+    snaps = await ctx.cache.get_snapshots("Covens", "ninja:BaseType", row["id"])
+    assert len(snaps) == 1
+
+
+async def test_failed_snapshot_insert_is_retried_by_the_next_caller(
+    ninja: NinjaClient, ctx: AppContext, caplog: pytest.LogCaptureFixture
+) -> None:
+    item = "imperial-bow-86-hunter"
+    original = ctx.cache.add_snapshots
+    failures = 0
+
+    async def flaky(rows: Any) -> int:
+        nonlocal failures
+        rows = list(rows)
+        if any(r.item_id == item for r in rows) and failures == 0:
+            failures += 1
+            raise OSError("database is locked")
+        return await original(rows)
+
+    ctx.cache.add_snapshots = flaky  # type: ignore[method-assign]
+    caplog.set_level(logging.ERROR, logger="poe_craft_mcp.clients.ninja_history")
+    first, second = await asyncio.gather(
+        ninja.price("BaseType", item), ninja.price("BaseType", item)
+    )
+    assert first is not None and second is not None and failures == 1
+    assert len(caplog.records) == 1
+    snaps = await ctx.cache.get_snapshots("Covens", "ninja:BaseType", item)
+    assert [s.chaos for s in snaps] == [2.0]
