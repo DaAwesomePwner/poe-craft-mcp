@@ -1,0 +1,81 @@
+# Starter recipe from a PRE-3.30 guide (3.28); odds from the RePoE 3.30.0.4.3 export. NOT verified in game.
+id: medium-cluster-crit-malice-pressure-points
+name: Medium Cluster Jewel (Crit Chance, 4 passives), Overwhelming Malice + Pressure Points (alt-aug, one regal)
+tags: [cluster, alt, regal, starter]
+status: unverified
+verified_patch: null
+sources:
+  - "https://poeautocraft.com/autocraft-strategy/d15fda9a-bc1b-4ead-9124-cf2f364adf69/"
+requires: []
+budget_div: 0.1
+base:
+  # Cheapest instant-buyout white (normal), not corrupted Medium Cluster Jewel with "15%
+  # increased Critical Strike Chance", "Adds 4 Passive Skills", item level 68-83.
+  trade_url: "https://www.pathofexile.com/trade/search/Covens/H4sIAAAAAAACCnWQ0U7DMAxFf2Xyc4Uo7apkr7wh8QVomkLqiUhpUpxkUFX5d5wyUJDGU5zre48tr_CekBY4rBCiiimUys_ReAcHCKgTqVeLkBuIy4ysPeNo0rR7tClEpN0TfqCFZktz-GX98Sk3snw2ll3fDTOyjE6_KRfviv_UyV5I2bVCsvWibMJ6_IPkqaMJZQGOnpUNmJubnHsxtPuh7fc1ZzIM6RuY1Ce_N1jHfKw2LIGgT9W_Ko292F_mIK5Q0TFVe6I0x4KtTrdNgJyvh_sHS4pMXP4EnadJ2ZIs2eAplvZMRm9XDZpbX0DuN_q2AQAA"
+steps:
+  - action: transmute
+    materials:
+      - { source: ninja, category: Currency, name: "Orb of Transmutation", qty: 1 }
+  - action: alt_aug
+    materials:
+      - { source: ninja, category: Currency, name: "Orb of Alteration", qty: 1 }
+      # Augmentations per cycle = 4.4326 / 18.672 (mod_odds alt_aug expected_materials).
+      - { source: ninja, category: Currency, name: "Orb of Augmentation", qty: 0.2374 }
+    repeat_until: "the magic jewel shows Overwhelming Malice or Pressure Points"
+    p_success:
+      p_source: weights
+      method: alt_aug
+      target_mods: ["AfflictionNotableOverwhelmingMalice", "AfflictionNotablePressurePoints__"]
+      base: "Medium Cluster Jewel"
+      ilvl: 75
+      enchant: "Critical Strike Chance"
+      passives: 4
+  - action: regal
+    materials:
+      # One Regal per attempt, paid once: a miss is sold (see outcomes), not rerolled.
+      - { source: ninja, category: Currency, name: "Regal Orb", qty: 1 }
+outcomes:
+  - name: "Overwhelming Malice + Pressure Points"
+    probability: 0.0116569
+    # Rare Medium, Crit Chance enchant, 4 passives, ilvl 68-83, not corrupted, both notables.
+    trade_url: "https://www.pathofexile.com/trade/search/Covens/H4sIAAAAAAACCoVRS26DMBC9SuQ1qiAGYmebXaWeoEKRaybqSA5Qf9IgxN07prRypDRdefxm3mfsiX0EsCPbT8x55YOLVT947Du2Zw50sOrNAJsz5scBCHuBFsN5czDBebCbZ_gEw7KFTeTX6WdOdS3BJzQ09d3AlmDo9Lvq_FOcP3JZCil5ISSNXpQJkNpvJbm26GIAop6UcTBnd3VyURdVXZRVqnNGEikzdlZXOu9oNVHtn7jXwaDG1We3y8tcFDlPbB5lvCFzLgu5rSpRPmY3c5MEiWs4fUzuSYnmYn43rcW6quCkqntrw-CjbPKhiwOb5_U7_5C1yqIfb4gELbzIdL31sTlY1MvTOU2tLwU0I5dKAgAA"
+  - name: "Overwhelming Malice or Pressure Points without its target partner (missed Regal)"
+    probability: 0.9883431
+    # Rare, same enchant, passives and ilvl range, not corrupted: exactly one of the two.
+    trade_url: "https://www.pathofexile.com/trade/search/Covens/H4sIAAAAAAACCn2STW7DIBCFrxKxtioTbAeyza5ST1BZEcVERcLY5SeNZXH3Dq5bEdXNimFmvjdvBDP6CNJO6Dgj57kPLkXD6NVg0BE5KYLlb1qiWCA_jRJyL7JTod-ddHBe2t2z_JQaFQsN8Ov808dNB-mL0tD1XVAdpKUR79z4p9R_JqyijBFMGbReuQ4yH79nMLVTLhkA9MK1k7HY1Clpg-sGV3Wu0ysQqQrU8xucG1ptUlvtiiEY_4fGK43j1iq3USuhVg-HQ1mVFJckE3nk_w4mhGG2r2taPabb2GZGkkknztk9C5W-6t89GrouQgmoisHaMPokmz32MgHFuD71P7KWW-WnOxBSC5dIN1ifiqNVYvkFTkDpC3l1IfJmAgAA"
+salvage:
+  # Not used: both end states are sold through the searches above.
+  fixed_chaos: 0
+minutes: 4
+notes: >-
+  Older guide (poeautocraft, 3.28 Mirage, March 2026): check it still holds in 3.30. What you
+  make: a rare Medium Cluster Jewel with the enchant "Added Small Passive Skills grant: 15%
+  increased Critical Strike Chance" and "Adds 4 Passive Skills", carrying both Overwhelming
+  Malice and Pressure Points. Buy a white (normal) jewel with that enchant, 4 passives and item
+  level 68-83 (Overwhelming Malice needs item level 68; at 84+ extra small-passive mods join the
+  pool and both notables get rarer; the guide buys 75-83). Check it is not corrupted. Steps. (1)
+  Use one Orb of Transmutation to make the white jewel magic. (2) Alteration and Augmentation
+  cycle: use an Orb of Alteration; if the jewel has only a suffix (a small-passive line such as
+  "+2 to All Attributes"), use an Orb of Augmentation to add a prefix; if it has only a prefix
+  that is neither notable, alterate again. Stop as soon as Overwhelming Malice or Pressure
+  Points appears; if it appears alone, do not augment. (3) Use one Regal Orb. If it adds the
+  other notable, sell the pair. Otherwise sell the rare jewel (the anchor without its target
+  partner) as it is. How the odds are derived (export weights at ilvl 75; ilvl 68-83 have the
+  same pool): all mods weigh 22326, prefixes 11726, suffixes 10600; Overwhelming Malice 171,
+  Pressure Points 457. Per cycle one of them appears with chance 0.05356 (mod_odds alt_aug:
+  about 18.7 Alterations and 4.43 Augmentations per hit); it is Pressure Points 72.8% of the
+  time and Overwhelming Malice 27.2%. The jewel has no suffix 26.3% of the time. The Regal then
+  adds the missing notable with chance 0.00782 (Pressure Points there, Overwhelming Malice
+  wanted; 0.00815 averaged over the suffix it may carry) or 0.0206 (Overwhelming Malice there,
+  Pressure Points wanted; 0.0215 with a suffix), all mod_odds regal. Together 0.0116569 per
+  attempt (the pair outcome, about 1 in 86); the other 0.9883431 is a rare jewel with one of the
+  two and not the other, priced by its own search (it takes the cheaper of the two, so it is
+  conservative). Pricing: every search here (base and both sales) asks for instant-buyout
+  listings only (trade status "securable"); both sale searches take rare jewels with the same
+  enchant, passive count and item-level range as the base, not corrupted. The pair is rare: most
+  of the value is the one-notable sale. Not modelled: the guide scours a miss and starts again
+  (here a miss is sold) and uses an Exalted Orb when the Regal added a suffix and a prefix slot
+  is still open. Minutes (estimate, not from the guide): about 19 Alterations at 3 s each (1
+  min), the Regal, plus buying the base and listing (3 min). Verify in game: notable names and
+  item levels, the enchant and passive count on the searches, and that the sale searches show
+  jewels like yours.
