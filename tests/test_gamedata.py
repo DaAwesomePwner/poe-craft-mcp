@@ -10,11 +10,13 @@ import pytest
 
 from poe_craft_mcp.config import Config
 from poe_craft_mcp.context import AppContext
+from poe_craft_mcp.gamedata import publish as publish_module
 from poe_craft_mcp.gamedata.fetch import FetchError, fetch_export
 from poe_craft_mcp.gamedata.loader import EXPORT_FILES, get_gamedata, load_gamedata
 from poe_craft_mcp.gamedata.lookup import resolve_base, resolve_essence, resolve_fossils
 from poe_craft_mcp.gamedata.models import GameData, GameDataError, parse_patch
 from poe_craft_mcp.gamedata.pool import PoolEntry, entry_for, first_match
+from poe_craft_mcp.gamedata.publish import lock_path, previous_dir
 
 FIXTURE_DIR = Path(__file__).resolve().parent / "fixtures" / "gamedata"
 
@@ -158,13 +160,22 @@ def _export_transport(fail: str | None = None) -> httpx.MockTransport:
     return httpx.MockTransport(handler)
 
 
+def _work_dirs(parent: Path) -> list[str]:
+    return sorted(p.name for p in parent.glob("gamedata.*-*"))
+
+
+def _fetch(target: Path, fail: str | None = None) -> dict[str, object]:
+    with httpx.Client(transport=_export_transport(fail)) as client:
+        return fetch_export(target, "test-agent", client=client)
+
+
 def test_fetch_publishes_complete_verified_export(tmp_path: Path) -> None:
     target = tmp_path / "gamedata"
     with httpx.Client(transport=_export_transport()) as client:
         manifest = fetch_export(target, "test-agent", client=client)
     assert manifest["game_version"] == "3.30.0.4.3"
     assert set(manifest["files"]) == set(EXPORT_FILES)
-    assert not (tmp_path / "gamedata.staging").exists()
+    assert _work_dirs(tmp_path) == []
     loaded = load_gamedata(target)
     assert loaded.game_version == "3.30.0.4.3" and "Strength1" in loaded.mods
 
@@ -178,7 +189,7 @@ def test_failed_fetch_keeps_previous_export(tmp_path: Path) -> None:
     ):
         fetch_export(target, "test-agent", client=client)
     assert {p.name: p.read_bytes() for p in target.iterdir()} == before
-    assert not (tmp_path / "gamedata.staging").exists()
+    assert _work_dirs(tmp_path) == []
 
 
 def test_oversized_download_aborts_and_keeps_previous_export(tmp_path: Path) -> None:
@@ -202,3 +213,69 @@ def test_loader_rejects_files_not_matching_manifest(tmp_path: Path) -> None:
     (export / "base_items.json").write_text("{}", encoding="utf-8")
     with pytest.raises(GameDataError, match="does not match manifest"):
         load_gamedata(export)
+
+
+def test_second_fetch_keeps_previous_and_cleans_up(tmp_path: Path) -> None:
+    target = _copy_export(tmp_path / "gamedata", {"game_version": "3.29.0", "marker": "old"})
+    _fetch(target)
+    first = json.loads((target / "manifest.json").read_text(encoding="utf-8"))
+    assert json.loads((previous_dir(target) / "manifest.json").read_text())["marker"] == "old"
+    _fetch(target)
+    previous = json.loads((previous_dir(target) / "manifest.json").read_text(encoding="utf-8"))
+    assert previous["downloaded_at"] == first["downloaded_at"] and "marker" not in previous
+    assert _work_dirs(tmp_path) == [] and not lock_path(target).exists()
+
+
+def test_concurrent_fetch_is_refused_by_lock(tmp_path: Path) -> None:
+    target = _copy_export(tmp_path / "gamedata", {"game_version": "3.30.0"})
+    before = {p.name: p.read_bytes() for p in target.iterdir()}
+    lock_path(target).write_text("pid 1", encoding="utf-8")
+    with pytest.raises(FetchError, match="another game data fetch is running"):
+        _fetch(target)
+    assert lock_path(target).exists(), "must not remove another run's lock"
+    assert {p.name: p.read_bytes() for p in target.iterdir()} == before
+    assert _work_dirs(tmp_path) == []
+
+
+def test_interrupt_between_renames_restores_previous_export(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    target = _copy_export(tmp_path / "gamedata", {"game_version": "3.30.0", "marker": "old"})
+
+    def interrupted(staging: Path, dest: Path) -> None:
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(publish_module, "_swap_in", interrupted)
+    with pytest.raises(KeyboardInterrupt):
+        _fetch(target)
+    assert json.loads((target / "manifest.json").read_text(encoding="utf-8"))["marker"] == "old"
+
+
+def test_hard_kill_between_renames_is_recovered_by_loader_and_fetch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    target = _copy_export(tmp_path / "gamedata", {"game_version": "3.30.0", "marker": "old"})
+    monkeypatch.setattr(publish_module, "_swap_in", lambda staging, dest: _raise_kill())
+    monkeypatch.setattr(publish_module, "recover_previous", lambda dest: None)
+    with pytest.raises(SystemExit):
+        _fetch(target)
+    monkeypatch.undo()
+    assert not target.exists() and previous_dir(target).is_dir()
+
+    lock_path(target).write_text("stale", encoding="utf-8")
+    with pytest.raises(GameDataError, match="fetch is in progress"):
+        load_gamedata(target)
+    lock_path(target).unlink()
+    restored = load_gamedata(target)
+    assert restored.game_version == "3.30.0"
+    assert "restored the previous" in restored.load_warnings[0]
+    assert not previous_dir(target).exists()
+
+    target.rename(previous_dir(target))
+    with pytest.raises(FetchError, match="500"):
+        _fetch(target, fail="mods")
+    assert json.loads((target / "manifest.json").read_text(encoding="utf-8"))["marker"] == "old"
+
+
+def _raise_kill() -> None:
+    raise SystemExit("killed")

@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -21,6 +22,7 @@ from poe_craft_mcp.gamedata.models import (
     ModDef,
     TagWeights,
 )
+from poe_craft_mcp.gamedata.publish import lock_path, recover_previous
 
 log = logging.getLogger(__name__)
 
@@ -126,7 +128,15 @@ def _read_json(path: Path, manifest: dict[str, Any] | None = None) -> Any:
 
 
 def load_gamedata(directory: Path) -> GameData:
-    """Parse the export in `directory`. Raises GameDataError with a fetch hint if missing."""
+    """Parse the export in `directory`. Raises GameDataError with a fetch hint if missing.
+
+    If `directory` is missing after an interrupted fetch, `gamedata.previous` is restored."""
+    if not directory.exists() and lock_path(directory).exists():
+        raise GameDataError(
+            f"a game data fetch is in progress ({lock_path(directory).name}); retry when it "
+            "finishes, or delete the lock file if no fetch is running"
+        )
+    recovered = recover_previous(directory)
     missing = [n for n in REQUIRED_FILES if not (directory / f"{n}.json").is_file()]
     if missing:
         raise GameDataError(
@@ -147,7 +157,7 @@ def load_gamedata(directory: Path) -> GameData:
     )
     if data.stale_warning:
         log.warning(data.stale_warning)
-    return data
+    return replace(data, load_warnings=(recovered,)) if recovered else data
 
 
 def _parse(directory: Path) -> GameData:

@@ -116,7 +116,19 @@ def mod_odds(
     warnings += list(setup.warnings)
     start = _start(setup)
     roll_ilvl = min(ilvl, setup.ilvl_cap) if setup.ilvl_cap is not None else ilvl
-    pool = build_pool(data, item, roll_ilvl, setup.fossils, blocked_groups=start.groups)
+    full_sides = {
+        side
+        for side, used, cap in (
+            ("prefix", start.prefixes, setup.model.max_prefix),
+            ("suffix", start.suffixes, setup.model.max_suffix),
+        )
+        if used >= cap
+    }
+    pool = [
+        e
+        for e in build_pool(data, item, roll_ilvl, setup.fossils, blocked_groups=start.groups)
+        if e.side not in full_sides
+    ]
     target_ids = {m.id for m in targets}
     pooled = {e.mod.id for e in pool}
     forced_ids = {m.id for m in setup.forced}
@@ -125,7 +137,10 @@ def mod_odds(
         if mod.id in forced_ids or mod.id in pooled:
             continue
         reason = entry_for(mod, item, roll_ilvl, setup.fossils, added)
-        if isinstance(reason, PoolEntry):
+        if isinstance(reason, PoolEntry) and reason.side in full_sides:
+            side = reason.side
+            reason = f"{mod.id} is a {side} and the forced mod(s) fill every {side} slot"
+        elif isinstance(reason, PoolEntry):
             reason = f"{mod.id} shares a mod group with the forced mod, so it cannot roll"
         elif roll_ilvl < ilvl:
             reason += f"; {setup.label} caps item level at {roll_ilvl} for the other mods"
@@ -152,8 +167,7 @@ def mod_odds(
             f"no hit in {estimate.samples} Monte Carlo samples; the chance is unresolved and "
             f"below {estimate.upper_bound_95:.2e} per attempt (95% one-sided bound)"
         )
-    if data.stale_warning:
-        warnings.insert(0, data.stale_warning)
+    warnings[:0] = [*data.load_warnings, *([data.stale_warning] if data.stale_warning else [])]
     return {
         "base": {"id": item.id, "name": item.name, "item_class": item.item_class},
         "ilvl": ilvl,

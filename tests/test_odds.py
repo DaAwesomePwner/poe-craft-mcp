@@ -149,6 +149,29 @@ def test_helical_ring_affix_limits(data: GameData) -> None:
         mod_odds(data, "Helical Ring", 1, ["AddedFireDamage1"], "alt")
 
 
+def test_forced_mod_filling_a_side_removes_that_side(data: GameData) -> None:
+    # Helical Ring allows 1 prefix; Muttering Essence of Torment forces the prefix
+    # AddedLightningDamage2, so no other prefix can roll: exactly 0, never "unresolved".
+    method = "essence:Muttering Essence of Torment"
+    for force_mc in (False, True):
+        result = mod_odds(
+            data, "Helical Ring", 13, ["IncreasedLife0"], method, force_monte_carlo=force_mc
+        )
+        assert result["chance_per_attempt"] == 0
+        assert result["calculation"] == {"method": "exact", "resolved": True, **_zero_by_count()}
+    assert any("fill every prefix slot" in w for w in result["warnings"])
+    assert {e["side"] for e in result["weight_table"]["entries"]} == {"suffix"}
+    assert result["weight_table"]["totals"]["prefix"] == 0
+    # 4-6 affixes leave >= 3 random suffix draws; the 3 eligible suffixes (Strength1,
+    # FireResist1, AllAttributes1) all fit in the 4 suffix slots, so Strength1 always lands.
+    suffix = mod_odds(data, "Helical Ring", 13, ["Strength1"], method)
+    assert suffix["chance_per_attempt"] == pytest.approx(1.0, abs=1e-12)
+
+
+def _zero_by_count() -> dict[str, dict[str, float]]:
+    return {"chance_by_affix_count": {"4": 0.0, "5": 0.0, "6": 0.0}}
+
+
 def test_fossil_with_unmodelled_effect_is_rejected(data: GameData) -> None:
     with pytest.raises(GameDataError, match=r"Sanctified Fossil is not modelled: lucky"):
         mod_odds(data, "Vaal Regalia", 86, ["FireResist1"], "fossil:pristine,sanctified")

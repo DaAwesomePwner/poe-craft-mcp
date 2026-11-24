@@ -5,7 +5,9 @@ Usage: uv run python scripts/fetch_gamedata.py [--config path/to/config.toml]
 Writes mods.json, base_items.json, essences.json, fossils.json, crafting_bench_options.json,
 stat_translations.json and a manifest.json recording the source URLs, download time, the game
 version the export was built from (the export's version.txt) and a sha256 per file. The new
-export replaces the old one only after every file downloaded and validated.
+export replaces the old one only after every file downloaded and validated; the replaced one is
+kept as gamedata.previous. Only one fetch runs at a time (gamedata.fetch.lock); if a fetch was
+killed and none is running, delete that lock file by hand.
 """
 
 from __future__ import annotations

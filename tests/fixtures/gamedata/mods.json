@@ -50,6 +50,57 @@
   "text": "Adds 1 to 2 Fire Damage to Attacks",
   "type": "FireDamage"
  },
+ "AddedLightningDamage2": {
+  "adds_tags": [],
+  "domain": "item",
+  "generation_type": "prefix",
+  "generation_weights": [],
+  "groups": [
+   "LightningDamage"
+  ],
+  "implicit_tags": [
+   "elemental_damage",
+   "damage",
+   "elemental",
+   "lightning",
+   "attack"
+  ],
+  "is_essence_only": false,
+  "name": "Buzzing",
+  "required_level": 13,
+  "spawn_weights": [
+   {
+    "tag": "ring",
+    "weight": 500
+   },
+   {
+    "tag": "amulet",
+    "weight": 500
+   },
+   {
+    "tag": "gloves",
+    "weight": 500
+   },
+   {
+    "tag": "default",
+    "weight": 0
+   }
+  ],
+  "stats": [
+   {
+    "id": "attack_minimum_added_lightning_damage",
+    "max": 1,
+    "min": 1
+   },
+   {
+    "id": "attack_maximum_added_lightning_damage",
+    "max": 15,
+    "min": 14
+   }
+  ],
+  "text": "Adds 1 to (14-15) Lightning Damage to Attacks",
+  "type": "LightningDamage"
+ },
  "AllAttributes1": {
   "adds_tags": [],
   "domain": "item",
