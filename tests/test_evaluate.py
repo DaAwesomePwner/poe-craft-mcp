@@ -447,3 +447,15 @@ async def test_salvage_lookup_uses_its_poe_ninja_type(
     assert quote is not None and quote["chaos"] > 1
     salvage = by_name(ev)["salvage"]
     assert salvage.status == "ok" and salvage.chaos == pytest.approx(quote["chaos"])
+
+
+async def test_salvage_basetype_lookup_keeps_its_filters_in_any_case(
+    ctx: AppContext, api: NinjaApi, trade: TradeClient, store: RecipeStore
+) -> None:
+    mock_trade(api)
+    recipe = store.get("life-plate")
+    assert recipe is not None
+    lookup = {"source": "ninja", "type": "basetype", "name": "Stygian Vise", "ilvl_min": 82}
+    vise = recipe.model_validate({**recipe.to_document(), "salvage": {"lookup": lookup}})
+    ev = await evaluate_recipe(ctx, vise, Pricer(ctx), 0.05)
+    assert by_name(ev)["salvage"].chaos == 92.4  # cheapest ilvl >= 82 row, as find_base picks

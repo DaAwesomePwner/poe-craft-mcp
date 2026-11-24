@@ -121,7 +121,7 @@ class Pricer:
         if salvage.trade_url is not None:
             return await self.trade("salvage", SALVAGE, salvage.trade_url)
         lookup: NinjaLookup = salvage.lookup  # type: ignore[assignment]
-        if lookup.type == "BaseType":
+        if lookup.type.strip().lower() == "basetype":
             find = lambda: self.ninja.find_base(lookup.name, lookup.ilvl_min, lookup.influence)  # noqa: E731
         else:
             find = lambda: self.ninja.price(lookup.type, lookup.name)  # noqa: E731
