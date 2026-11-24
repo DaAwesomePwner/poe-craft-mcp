@@ -78,8 +78,9 @@ Value uses the 25th percentile of the listings minus the configured undercut.
 ## Trade URLs
 
 Build the search for the *finished* item on pathofexile.com/trade, run it and copy the URL
-(`.../trade/search/<league>/<id>`, or `.../trade/exchange/...`). The league segment is ignored
-and the current league is searched. Keep the filters tight enough that the cheapest listings
+(`.../trade/search/<league>/<id>`, or `.../trade/exchange/...`). Paste it **unchanged**: the
+server needs the original league to look up a saved search, then swaps in the current league
+when it runs it. Keep the filters tight enough that the cheapest listings
 are the item you would really sell. A URL containing `<` (placeholder) cannot be priced, and
 the recipe carries a warning until you replace it.
 

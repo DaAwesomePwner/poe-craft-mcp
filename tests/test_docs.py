@@ -11,6 +11,7 @@ from mcp import Client
 
 from poe_craft_mcp.config import Config
 from poe_craft_mcp.recipes.loader import parse_recipe_file
+from poe_craft_mcp.recipes.models import Base, Outcome, Salvage, Step
 from poe_craft_mcp.server import build_server
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -45,6 +46,7 @@ def test_readme_minimal_recipe_validates(tmp_path: Path) -> None:
 def test_readme_config_keys_exist() -> None:
     section = README.split("## Configuration", 1)[1].split("\n## ", 1)[0]
     keys = set(re.findall(r"^\| `(\w+)`", section, flags=re.MULTILINE))
+    assert {"contact", "league", "include_unverified"} <= keys
     assert keys <= set(Config.model_fields)
 
 
@@ -59,9 +61,28 @@ def test_import_prompt_requires_unverified_drafts() -> None:
     assert "recipe.schema.json" in prompt
 
 
-def test_doc_recipe_snippets_are_valid_yaml() -> None:
+def test_recipe_guide_snippets_validate() -> None:
+    """Every YAML fragment in docs/recipes.md parses into the recipe models."""
     text = (ROOT / "docs" / "recipes.md").read_text(encoding="utf-8")
     blocks = re.findall(r"```yaml\n(.*?)```", text, flags=re.DOTALL)
-    assert blocks
+    assert len(blocks) >= 3
+    seen: set[str] = set()
     for block in blocks:
-        yaml.safe_load(block)
+        # A block may show alternatives separated by a "# or" line.
+        for part in block.split("# or\n"):
+            doc = yaml.safe_load(part)
+            if isinstance(doc, list):
+                steps = [Step.model_validate(item) for item in doc]
+                assert steps
+                seen.add("steps")
+            elif "base" in doc:
+                Base.model_validate(doc["base"])
+                seen.add("base")
+            elif "outcomes" in doc:
+                outcomes = [Outcome.model_validate(item) for item in doc["outcomes"]]
+                assert sum(o.probability for o in outcomes) == pytest.approx(1.0)
+                Salvage.model_validate(doc["salvage"])
+                seen.add("outcomes")
+            else:
+                pytest.fail(f"unrecognised snippet: {part!r}")
+    assert seen == {"steps", "base", "outcomes"}

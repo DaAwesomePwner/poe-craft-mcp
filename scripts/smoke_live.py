@@ -7,11 +7,12 @@ Usage:
     uv run python scripts/smoke_live.py --live --trade-url "https://www.pathofexile.com/trade/search/<league>/<id>"
     uv run python scripts/smoke_live.py --live --config path/to/config.toml
 
-Makes 2 to 3 poe.ninja requests (league list, Currency) and, with --trade-url, one trade search
-plus one listing fetch (resolving a saved URL costs one more). Results land in the normal
-cache (<data_dir>/cache.db), so a repeat run inside the cache window makes no requests.
-Prints a compact summary to stdout and exits 1 on any failure. Prints whether POESESSID is set,
-never its value.
+Makes 2 poe.ninja requests (league list, Currency) and, with --trade-url, a trade search of the
+10 cheapest listings: one search and one listing fetch, plus one more to resolve a saved URL
+whose id does not embed the query. Results land in the normal cache (<data_dir>/cache.db), so a
+repeat run inside the cache window makes no requests and proves nothing about the live sites.
+Prints a compact summary to stdout and exits 1 on any failure, including when stale cached data
+was served because a live request failed. Prints whether POESESSID is set, never its value.
 """
 
 from __future__ import annotations
@@ -29,6 +30,8 @@ from poe_craft_mcp.context import AppContext
 from poe_craft_mcp.http.fetch import FetchError
 from poe_craft_mcp.services.trade_pricing import PricingUnavailable, price_outcome
 
+TRADE_SAMPLE = 10  # one listing-fetch batch
+
 
 def fmt(value: float | None) -> str:
     return "n/a" if value is None else f"{value:,.1f}"
@@ -43,17 +46,19 @@ async def check_ninja(ctx: AppContext) -> bool:
     except (NinjaError, FetchError) as exc:
         print(f"FAIL poe.ninja: {exc}")
         return False
-    stale = " (STALE)" if currency.stale else ""
     age = "just fetched" if currency.age_seconds is None else f"{currency.age_seconds:.0f}s old"
     print(f"ok   league: {league.id} ({league.name})")
-    print(f"ok   Currency: {len(currency.rows)} rows, {age}{stale}")
+    print(f"ok   Currency: {len(currency.rows)} rows, {age}")
     print(f"ok   1 divine = {fmt(per_divine)} chaos")
+    if league.stale or currency.stale:
+        print("FAIL poe.ninja: a live request failed and stale cached data was served")
+        return False
     return True
 
 
 async def check_trade(ctx: AppContext, url: str) -> bool:
     try:
-        price = await price_outcome(ctx, trade_url=url)
+        price = await price_outcome(ctx, trade_url=url, sample=TRADE_SAMPLE)
     except ValueError as exc:
         print(f"FAIL trade URL: {exc}")
         return False
@@ -61,13 +66,18 @@ async def check_trade(ctx: AppContext, url: str) -> bool:
         wait = f" (retry in about {exc.retry_after:.0f}s)" if exc.retry_after else ""
         print(f"FAIL trade: {exc.reason}{wait}")
         return False
-    stale = " (STALE: served from cache)" if price.stale else ""
-    print(f"ok   trade search {price.search_id} in {price.league}: {price.total} total{stale}")
+    print(f"ok   trade search {price.search_id} in {price.league}: {price.total} total")
     print(
         f"ok   chaos p10/p25/median: {fmt(price.p10)} / {fmt(price.p25)} / {fmt(price.median)} "
         f"from {price.listing_count} listings (raw {price.raw_count})"
     )
-    return price.listing_count > 0
+    if price.stale:
+        print("FAIL trade: a live request failed (rate limited?) and stale cached data was served")
+        return False
+    if price.listing_count == 0:
+        print("FAIL trade: no usable listings")
+        return False
+    return True
 
 
 async def run(config: Config, trade_url: str | None) -> bool:

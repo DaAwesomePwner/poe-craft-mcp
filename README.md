@@ -77,8 +77,13 @@ This product isn't affiliated with or endorsed by Grinding Gear Games in any way
 
    **Claude Code**
 
+   Run this with the absolute path of your clone, in quotes (it may contain spaces):
+
    ```sh
-   claude mcp add poe-craft -- uv --directory <repo path> run poe-craft-mcp
+   # Windows
+   claude mcp add poe-craft -- uv --directory "C:\path\to\poe-craft-mcp" run poe-craft-mcp
+   # macOS / Linux
+   claude mcp add poe-craft -- uv --directory "/path/to/poe-craft-mcp" run poe-craft-mcp
    ```
 
    **Claude Desktop**: add this under `mcpServers` in `claude_desktop_config.json` (Windows:
@@ -104,7 +109,7 @@ This product isn't affiliated with or endorsed by Grinding Gear Games in any way
    `recipes/` and `data/` there. If you launch it some other way, set `POE_CRAFT_CONFIG` to the
    config file and `POE_CRAFT_RECIPES` to the recipe folder.
 
-6. **Ask Claude.** See below.
+6. **Ask Claude**, then follow [Your first ranked answer](#your-first-ranked-answer).
 
 ## First questions
 
@@ -116,12 +121,33 @@ This product isn't affiliated with or endorsed by Grinding Gear Games in any way
 - "Price this trade search: `<trade URL>`"
 - "What's my chance per attempt of rolling `<mod id>` on a Vaal Regalia at ilvl 84 with chaos orbs?"
 
-**What to expect.** The repo ships three example recipes. They are `unverified` placeholders, so
-they are hidden from rankings and `list_recipes` by default, and the first answer will usually
-be "no verified recipes". To get a real ranking, add your own recipes (below) and mark them
-verified once you have checked them, or ask Claude to include unverified ones (it passes
-`include_unverified`, or set `include_unverified = true` in the config). Unverified results
-carry warnings; Claude is told to relay them.
+**What to expect on a fresh clone.** The three files in `recipes/` are structural templates,
+not working crafts. They are `unverified`, so rankings and `list_recipes` hide them by default,
+and each contains placeholders (`<league>`/`<...>` trade URLs, a `<mod id>`, example guide
+URLs). **They will not rank until you replace those placeholders**, even with
+`include_unverified` on. A first question like "best craft for 30 div" will answer that there
+are no rankable recipes. That is expected.
+
+## Your first ranked answer
+
+1. **Pick or write a recipe.** Copy an example in `recipes/` (or write one, see
+   [Writing recipes](#writing-recipes), or have Claude draft one from a guide with
+   [`scripts/import_recipe.md`](scripts/import_recipe.md)) and give it a new `id`.
+2. **Make a trade search for each outcome.** On pathofexile.com/trade, build the search for each
+   finished item the craft can produce, copy the URL and paste it unchanged into the recipe's
+   `trade_url` fields. Replace every other placeholder (`<mod id>`, guide URLs, `TODO`). Make
+   sure the failure outcome and `salvage` have real values.
+3. **Restart the server** (Claude Code: start a new session or `/mcp` reconnect; Claude
+   Desktop: restart the app). Recipes are loaded at startup.
+4. **Check that everything resolves.** Ask Claude to `get_recipe` and `evaluate_recipe` your
+   recipe. The breakdown must show a price for the base, every material and every outcome. Any
+   missing price (unknown item name, unresolved trade URL, bad `<mod id>`) is reported there;
+   fix it and restart again. `list_recipes` shows `load_errors` if the file failed validation.
+5. **Rank.** Ask "What's the best craft for a 30 div budget right now? Include unverified
+   recipes." (Claude passes `include_unverified=true`; or set `include_unverified = true` in
+   `config.toml`.) The recipe appears with an "unverified" warning that Claude should relay.
+6. **Optionally mark it verified.** Once you have checked it in game against patch 3.30 or later,
+   set `status: verified` and `verified_patch: "3.30.0"` (quoted). It then ranks by default.
 
 Every number comes with its source and age (`data_age_seconds`). Rankings sort by expected
 profit per hour: the price of each outcome is the 25th percentile of its trade listings minus a
@@ -169,7 +195,7 @@ steps:
     repeat_until: "T1 life prefix"
     p_success: { p_source: guide, value: 0.05, source_url: "https://example.com/guide" }
 outcomes:
-  - { name: "hit", probability: 0.4, trade_url: "https://www.pathofexile.com/trade/search/Standard/abc123" }
+  - { name: "hit", probability: 0.4, trade_url: "https://www.pathofexile.com/trade/search/Standard/abc123" }  # example id: paste your own saved search
   - { name: "miss", probability: 0.6, use_salvage: true }
 salvage: { fixed_chaos: 1 }
 minutes: 10
@@ -198,8 +224,9 @@ or `use_salvage: true` (uses the recipe's `salvage`).
 
 **Making a trade URL.** On pathofexile.com/trade, build the search for the finished item
 (the same filters you would use to sell it), run it, and copy the address-bar URL:
-`https://www.pathofexile.com/trade/search/<league>/<id>`. The league in the URL is ignored:
-the server always searches the current league. Exchange searches (`/trade/exchange/...`) work
+`https://www.pathofexile.com/trade/search/<league>/<id>`. Paste it into the recipe
+**unchanged**, league included: the server needs it to look up a saved search, and then swaps
+in the current league when it runs the search. Exchange searches (`/trade/exchange/...`) work
 too. If the URL contains the whole query, no extra request is needed to resolve it; otherwise
 the server fetches it once and caches it.
 
@@ -249,7 +276,7 @@ key. The ones you are most likely to change:
 
 | Symptom | Fix |
 | --- | --- |
-| "no verified recipes" or an empty ranking | Example recipes are unverified placeholders. Add and verify your own, or pass `include_unverified: true`. `list_recipes` shows how many are hidden |
+| "no verified recipes" or an empty ranking | The shipped examples are unverified templates with placeholders. Follow [Your first ranked answer](#your-first-ranked-answer): replace the placeholders, then rank with `include_unverified` or verify the recipe. `list_recipes` shows how many are hidden |
 | `list_recipes` shows `load_errors` | A recipe file failed validation and was skipped; the `reason` names the problem. Common: unquoted `verified_patch`, probabilities not summing to 1, an unknown key |
 | "no recipes loaded" | The server cannot find `recipes/`. Launch with `uv --directory <repo> run poe-craft-mcp`, or set `POE_CRAFT_RECIPES` |
 | Game data missing, or `mod_odds` fails | Run `uv run python scripts/fetch_gamedata.py` |
