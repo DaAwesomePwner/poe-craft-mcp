@@ -12,6 +12,37 @@ recipe walk through the craft step by step; `get_recipe <id>` shows them.
 | `granite-flagellants-armadillo` | Magic Granite Flask, Flagellant's (3 charges when hit) + of the Armadillo (56-60% armour) | same |
 | `convoking-wand-spell-minion-levels` | Rare Convoking Wand with +1 spell and +1 minion gem levels | [PoE Vault](https://poe-vault.com/guides/crafting-2-generic-minion-wand) (**pre-3.30**, July 2024) |
 
+## Live ranking (instant buyout only)
+
+`rank_crafts(budget_div=30, include_unverified=true, min_listings=1)`, finished 2026-11-24 04:38 UTC,
+league Covens, 1 divine = 197.7 chaos, 10 instant-buyout listings per search, 5% undercut. Prices
+come only from instant-buyout (asynchronous trade) listings; whisper listings are never used.
+From a cold cache the 21 searches hit the trade site's search rate limit, so the ranking was rerun
+in four rounds (waiting out the limit) until every recipe was priced; the oldest quote in the final
+ranking was about 37 minutes old. Chaos values per attempt: C = expected cost, C90 = cost of a bad
+(90th percentile) run, V = expected value.
+
+| Rank | Recipe | C | C90 | V | Profit | Profit/hr | ROI | Pair / target sale (p25, listings) | Miss / off-target sale (p25, listings) |
+| ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1 | `medium-cluster-minion-life-rebirth` | 13.7 | 17.9 | 32.6 | 18.9 | 283 | 1.37 | 589.5 c (30), p 0.0183 | 24 c (30), p 0.9817 |
+| 2 | `large-cluster-spell-mage-hunter` | 17.1 | 30.5 | 37.2 | 20.1 | 241 | 1.18 | 393 c (30), p 0.0481 | 21.25 c (30), p 0.9519 |
+| 3 | `medium-cluster-crit-malice-pressure-points` | 20.6 | 27.2 | 31.8 | 11.2 | 168 | 0.54 | 1179 c (23), p 0.0117 | 20 c (30), p 0.9883 |
+| 4 | `medium-cluster-chaos-dot-wicked-pall` | 17.0 | 29.3 | 23.7 | 6.8 | 81 | 0.40 | 196.5 c (30), p 0.0283 | 20 c (30), p 0.9717 |
+| 5 | `quicksilver-experimenters-cheetah` | 30.2 | 51.0 | 12.2 | -18.0 | -180 | -0.60 | 35 c (30), p 0.0263 | 12.25 c (30), p 0.9737 |
+| 6 | `granite-flagellants-armadillo` | 60.8 | 88.1 | 42.5 | -18.3 | -157 | -0.30 | 589.5 c (24), p 0.0263 | 30 c (30), p 0.9737 |
+| 7 | `convoking-wand-spell-minion-levels` | 4792 | 10944 | 1680 | -3112 | -15560 | -0.65 | 1768.5 c (30), p 1.0 | - |
+
+Read this before acting on it:
+
+- **Most of the cluster value comes from the misses.** About 97-99% of attempts end as a
+  one-notable rare sold for about 20-24 c; the pair hits add the rest. Profit depends on actually
+  selling many one-notable rares at that price, so list them steadily and re-check the price; a
+  few dozen sales can move it.
+- The Quicksilver base was flagged for low volume, and both flask crafts and the wand lose money at
+  these prices.
+- These are snapshot numbers: rerun `rank_crafts` before a big batch. The earlier snapshots below
+  were taken with online (whisper) listings and are superseded.
+
 ## How the odds were derived
 
 Nothing is guessed: every chance comes from the RePoE export for 3.30.0.4.3 through the
@@ -49,7 +80,9 @@ write out.
 Minutes are estimates (clicks per attempt times a few seconds, plus buying and listing); each
 recipe's notes give the basis.
 
-## Live snapshot
+## Live snapshot (superseded)
+
+**Superseded** by [Live ranking (instant buyout only)](#live-ranking-instant-buyout-only): taken with online (whisper) listings.
 
 `evaluate_recipe` for each recipe and `rank_crafts(budget_div=30, include_unverified=true)`,
 run 2026-11-24 03:54 UTC, league Covens, 1 divine = 197.7 chaos, 10 trade listings per search,
@@ -153,9 +186,9 @@ upside. The miss searches take the cheapest comparable rare jewel (for Crit and 
 cheaper of the two notables; for Large, a Mage Hunter jewel without either partner, although a
 Mage Hunter + suffix notable is worth more), so the miss values are conservative.
 
-### Live snapshot
+### Live snapshot (superseded)
 
-**Pre-instant-buyout, superseded:** taken with online (whisper) listings and the earlier
+**Pre-instant-buyout, superseded** by [Live ranking (instant buyout only)](#live-ranking-instant-buyout-only): taken with online (whisper) listings and the earlier
 magic-or-rare, any-item-level miss searches; it will be refreshed once pricing uses instant-buyout
 listings only.
 
