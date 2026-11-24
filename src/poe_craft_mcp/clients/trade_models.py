@@ -141,8 +141,39 @@ def is_instant_buyout(entry: Any) -> bool:
     return isinstance(fee, int | float) and not isinstance(fee, bool)
 
 
+LISTINGS_VERSION = 2  # payload shape of cached listings; 2 added `explicit_stats`
+STAT_ID_RE = re.compile(r"(?:explicit\.|fractured\.)?(stat_\d+)", re.ASCII)
+
+
+def explicit_stat_ids(item: dict[str, Any]) -> list[str]:
+    """Sorted, de-duplicated `explicit.stat_<digits>` ids of an item's explicit mods.
+
+    Reads `item.extended.hashes` (`{mod_type: [[stat_id, indices], ...]}`): the `explicit`
+    hashes plus the `fractured` ones, since a fractured mod is still the same mod (a
+    fractured notable is still the notable). A `fractured.` or missing prefix becomes
+    `explicit.`; anything that is not a trade stat id is skipped. Missing or malformed data
+    gives an empty list and never raises.
+    """
+    extended = item.get("extended")
+    hashes = extended.get("hashes") if isinstance(extended, dict) else None
+    if not isinstance(hashes, dict):
+        return []
+    found: set[str] = set()
+    for mod_type in ("explicit", "fractured"):
+        pairs = hashes.get(mod_type)
+        for pair in pairs if isinstance(pairs, list) else []:
+            # A row is exactly [stat_id, indices]; indices may be null.
+            stat_id = pair[0] if isinstance(pair, list | tuple) and len(pair) == 2 else None
+            match = STAT_ID_RE.fullmatch(stat_id) if isinstance(stat_id, str) else None
+            if match:
+                found.add(f"explicit.{match.group(1)}")
+    return sorted(found)
+
+
 def normalize_listing(entry: Any) -> dict[str, Any] | None:
-    """One fetch result -> `{id, amount, currency, indexed, stack_size}`.
+    """One fetch result -> `{id, amount, currency, indexed, stack_size, explicit_stats}`.
+
+    `explicit_stats` is `explicit_stat_ids(item)`.
 
     Returns None for delisted (null) entries and listings without a usable price (missing
     or non-numeric amount, missing currency); never raises on malformed input. Account and
@@ -167,4 +198,5 @@ def normalize_listing(entry: Any) -> dict[str, Any] | None:
         "currency": currency,
         "indexed": listing.get("indexed"),
         "stack_size": item.get("stackSize"),
+        "explicit_stats": explicit_stat_ids(item),
     }
