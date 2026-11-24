@@ -108,3 +108,20 @@ def test_child_logger_handlers_added_later_are_masked(tmp_path: Path) -> None:
     emitted = stream.getvalue() + (tmp_path / "ratelimit.log").read_text(encoding="utf-8")
     assert SECRET not in emitted
     assert "cookie ***" in emitted and "ValueError: ***" in emitted and "state for ***" in emitted
+
+
+def test_extra_fields_on_later_child_handlers_are_masked() -> None:
+    register_secret(SECRET)
+    child = logging.getLogger("poe_craft_mcp.test.extra")
+    stream = io.StringIO()
+    handler = logging.StreamHandler(stream)
+    handler.setFormatter(logging.Formatter("%(message)s cookie=%(cookie)s headers=%(headers)s"))
+    child.addHandler(handler)
+    try:
+        child.warning("request", extra={"cookie": SECRET, "headers": {"Cookie": SECRET}})
+    finally:
+        child.removeHandler(handler)
+        handler.close()
+    emitted = stream.getvalue()
+    assert SECRET not in emitted
+    assert "cookie=***" in emitted and "'Cookie': '***'" in emitted

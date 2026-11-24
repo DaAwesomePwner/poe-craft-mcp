@@ -16,10 +16,9 @@ _secrets: set[str] = set()
 
 
 def register_secret(value: str | None) -> None:
-    """Mask `value` in every log record created from now on, whatever handler emits it.
+    """Mask `value` in every log line from now on, whatever logger or handler emits it.
 
-    Masking happens in a process-wide LogRecord factory (installed on first use), so it
-    also covers handlers on child loggers and handlers added later. Empty values are ignored.
+    Empty values are ignored. See `install_masking` for how coverage is guaranteed.
     """
     if value:
         install_masking()
@@ -39,40 +38,48 @@ def mask_secrets(text: str) -> str:
 
 
 def mask_record(record: logging.LogRecord) -> None:
-    """Rewrite a record's message, exception text and stack so no registered secret survives."""
+    """Mask the message, args, exception/stack text and every string attribute (`extra`)."""
     if not _secrets:
         return
     try:
         message = record.getMessage()
     except Exception:  # malformed %-args: keep the raw parts so nothing is lost
         message = f"{record.msg} {record.args!r}"
-    record.msg = mask_secrets(message)
+    record.msg = message
     record.args = None
     if record.exc_info and not record.exc_text:
         record.exc_text = logging.Formatter().formatException(record.exc_info)
-    if record.exc_text:
-        record.exc_text = mask_secrets(record.exc_text)
-    if record.stack_info:
-        record.stack_info = mask_secrets(record.stack_info)
+    for name, value in list(vars(record).items()):
+        if isinstance(value, str):
+            setattr(record, name, mask_secrets(value))
 
 
 def install_masking() -> None:
-    """Wrap the current LogRecord factory so every new record is masked. Idempotent."""
-    base = logging.getLogRecordFactory()
-    if getattr(base, "_poe_craft_masking", False):
-        return
+    """Patch logging once, process-wide, so masking can't be bypassed by later code.
 
-    def factory(*args: Any, **kwargs: Any) -> logging.LogRecord:
-        record = base(*args, **kwargs)
+    `Logger.makeRecord` masks each record after `extra` is merged; `Handler.format` masks
+    the final formatted line, catching secrets inside non-string extras (dicts, objects).
+    """
+    if getattr(logging.Logger.makeRecord, "_poe_craft_masking", False):
+        return
+    make_record = logging.Logger.makeRecord
+    handler_format = logging.Handler.format
+
+    def masked_make_record(self: logging.Logger, *args: Any, **kwargs: Any) -> logging.LogRecord:
+        record = make_record(self, *args, **kwargs)
         mask_record(record)
         return record
 
-    factory._poe_craft_masking = True  # type: ignore[attr-defined]
-    logging.setLogRecordFactory(factory)
+    def masked_format(self: logging.Handler, record: logging.LogRecord) -> str:
+        return mask_secrets(handler_format(self, record))
+
+    masked_make_record._poe_craft_masking = True  # type: ignore[attr-defined]
+    logging.Logger.makeRecord = masked_make_record  # type: ignore[method-assign]
+    logging.Handler.format = masked_format  # type: ignore[method-assign]
 
 
 class SecretMaskingFilter(logging.Filter):
-    """Handler-level safety net for records built outside the factory (e.g. makeLogRecord)."""
+    """Handler-level safety net for records not built by `Logger.makeRecord`."""
 
     def filter(self, record: logging.LogRecord) -> bool:
         mask_record(record)

@@ -62,9 +62,9 @@ def cache_key(url: str, params: Mapping[str, Any] | None = None) -> str:
 class CachedHttpClient:
     """Wraps an `httpx.AsyncClient`; every GET goes through `ResponseCache`.
 
-    Requests for the same URL are serialized, so concurrent callers share one fetch.
-    After a failed fetch the URL is not retried for `max(min_interval_s, failure_backoff_s)`;
-    callers get the stale cached copy (or `FetchError`) meanwhile.
+    Callers arriving while a request for the same URL is pending share its result.
+    A failed fetch sets a retry deadline of `now + max(min_interval_s, failure_backoff_s)`
+    that every caller honours; until then they get the stale copy (or `FetchError`).
     """
 
     def __init__(
@@ -82,8 +82,8 @@ class CachedHttpClient:
         self._client = client
         self._owns_client = client is None
         self._timeout = timeout
-        self._locks: dict[str, asyncio.Lock] = {}
-        self._failed_at: dict[str, float] = {}
+        self._inflight: dict[str, asyncio.Task[FetchResult]] = {}
+        self._retry_at: dict[str, float] = {}
 
     def _http(self) -> httpx.AsyncClient:
         if self._client is None:
@@ -98,19 +98,25 @@ class CachedHttpClient:
         Raises `FetchError` on failure when nothing is cached.
         """
         key = cache_key(url, params)
-        asked_at = self.cache.clock()
-        async with self._locks.setdefault(key, asyncio.Lock()):
-            return await self._get_locked(key, min_interval_s, asked_at)
+        task = self._inflight.get(key)
+        if task is None:
+            task = asyncio.ensure_future(self._fetch(key, min_interval_s))
+            self._inflight[key] = task
+            task.add_done_callback(lambda done: self._finished(key, done))
+        # shield: one caller being cancelled must not cancel the fetch others are awaiting
+        return await asyncio.shield(task)
 
-    async def _get_locked(self, key: str, min_interval_s: float, asked_at: float) -> FetchResult:
+    def _finished(self, key: str, task: asyncio.Task[FetchResult]) -> None:
+        if self._inflight.get(key) is task:
+            del self._inflight[key]
+        if not task.cancelled():
+            task.exception()  # mark retrieved even if every awaiting caller was cancelled
+
+    async def _fetch(self, key: str, min_interval_s: float) -> FetchResult:
         cached = await self.cache.get(key)
-        if cached is not None and (
-            cached.age_seconds < min_interval_s or cached.fetched_at >= asked_at
-        ):
+        if cached is not None and cached.age_seconds < min_interval_s:
             return _from_cached(cached, stale=False)
-        failed_at = self._failed_at.get(key)
-        backoff = max(min_interval_s, self.failure_backoff_s)
-        if failed_at is not None and self.cache.clock() - failed_at < backoff:
+        if self.cache.clock() < self._retry_at.get(key, float("-inf")):
             return self._fallback(key, cached, "backing off after a recent failure")
 
         headers = {"User-Agent": self.user_agent, "Accept": "application/json"}
@@ -119,29 +125,35 @@ class CachedHttpClient:
         try:
             response = await self._http().get(key, headers=headers)
         except httpx.HTTPError as exc:
-            return self._failed(key, cached, f"{type(exc).__name__}: {exc}")
+            return self._failed(key, cached, min_interval_s, f"{type(exc).__name__}: {exc}")
 
         status = response.status_code
         if status == 304 and cached is not None:
-            self._failed_at.pop(key, None)
+            self._retry_at.pop(key, None)
             await self.cache.touch(key)
             return _from_cached(cached, stale=False, age=0.0)
         if status == 429 or status >= 500:
-            return self._failed(key, cached, f"HTTP {status}", status)
+            return self._failed(key, cached, min_interval_s, f"HTTP {status}", status)
         if status != 200:
             raise FetchError(key, f"HTTP {status}", status)
         try:
             data = response.json()
         except ValueError:
-            return self._failed(key, cached, "response body is not JSON", status)
-        self._failed_at.pop(key, None)
+            return self._failed(key, cached, min_interval_s, "response body is not JSON", status)
+        self._retry_at.pop(key, None)
         await self.cache.put(key, response.content, status, response.headers.get("ETag"))
         return FetchResult(data, 0.0, from_cache=False, stale=False, source_url=key)
 
     def _failed(
-        self, url: str, cached: CachedResponse | None, reason: str, status: int | None = None
+        self,
+        url: str,
+        cached: CachedResponse | None,
+        min_interval_s: float,
+        reason: str,
+        status: int | None = None,
     ) -> FetchResult:
-        self._failed_at[url] = self.cache.clock()
+        backoff = max(min_interval_s, self.failure_backoff_s)
+        self._retry_at[url] = max(self._retry_at.get(url, 0.0), self.cache.clock() + backoff)
         return self._fallback(url, cached, reason, status)
 
     def _fallback(
