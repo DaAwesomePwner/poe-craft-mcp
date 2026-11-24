@@ -24,6 +24,7 @@ from poe_craft_mcp.gamedata.records import (
     parse_clusters,
     parse_fossil,
     parse_mod,
+    parse_trade_stats,
 )
 
 log = logging.getLogger(__name__)
@@ -73,8 +74,9 @@ def _read_json(path: Path, manifest: dict[str, Any] | None = None) -> Any:
 
 
 def _read_optional(directory: Path, name: str, manifest: dict[str, Any]) -> Any:
-    """A file only some odds need (cluster_jewels), or None when absent or not part of the
-    manifest's download (an export fetched before the file was added)."""
+    """A file only some features need (cluster_jewels, stat_translations), or None when
+    absent or not part of the manifest's download (an export fetched before the file was
+    added)."""
     path = directory / f"{name}.json"
     if not path.is_file() or ("files" in manifest and name not in manifest["files"]):
         return None
@@ -147,6 +149,7 @@ def _parse(directory: Path) -> GameData:
     }
     fossils = {fid: parse_fossil(fid, raw) for fid, raw in raw_fossils.items() if raw.get("name")}
     raw_clusters = _read_optional(directory, "cluster_jewels", manifest)
+    raw_translations = _read_optional(directory, "stat_translations", manifest)
     downloaded = manifest.get("downloaded_at")
     return GameData(
         mods=mods,
@@ -157,6 +160,7 @@ def _parse(directory: Path) -> GameData:
         downloaded_at=datetime.fromisoformat(downloaded) if downloaded else None,
         source_url=manifest.get("source", EXPORT_BASE_URL),
         clusters=parse_clusters(raw_clusters) if raw_clusters else {},
+        trade_stats=parse_trade_stats(raw_translations) if raw_translations else {},
     )
 
 

@@ -210,6 +210,28 @@
      "2% Chance to Block Spell Damage"
     ],
     "tag": "affliction_chance_to_block"
+   },
+   {
+    "id": "affliction_strength",
+    "name": "Strength",
+    "stats": {
+     "base_strength": 10
+    },
+    "stat_text": [
+     "+10 to Strength"
+    ],
+    "tag": "affliction_strength"
+   },
+   {
+    "id": "affliction_reservation_efficiency_small",
+    "name": "Reservation Efficiency",
+    "stats": {
+     "base_mana_reservation_efficiency_+%": 6
+    },
+    "stat_text": [
+     "6% increased Mana Reservation Efficiency of Skills"
+    ],
+    "tag": "affliction_reservation_efficiency_small"
    }
   ],
   "size": "Small",

@@ -1,0 +1,278 @@
+[
+ {
+  "English": [
+   {
+    "condition": [
+     {}
+    ],
+    "format": [
+     "+#"
+    ],
+    "index_handlers": [
+     []
+    ],
+    "string": "Added Small Passive Skills also grant: {0} to Maximum Life"
+   }
+  ],
+  "ids": [
+   "local_affliction_jewel_small_nodes_grant_maximum_life"
+  ],
+  "trade_stats": [
+   {
+    "id": "explicit.stat_3819827377",
+    "text": "Added Small Passive Skills also grant: +# to Maximum Life",
+    "type": "explicit"
+   },
+   {
+    "id": "fractured.stat_3819827377",
+    "text": "Added Small Passive Skills also grant: +# to Maximum Life",
+    "type": "fractured"
+   }
+  ]
+ },
+ {
+  "English": [
+   {
+    "condition": [
+     {}
+    ],
+    "format": [
+     "ignore"
+    ],
+    "index_handlers": [
+     []
+    ],
+    "string": "1 Added Passive Skill is Eternal Suffering"
+   }
+  ],
+  "ids": [
+   "local_affliction_notable_eternal_suffering"
+  ],
+  "trade_stats": [
+   {
+    "id": "explicit.stat_2144634814",
+    "text": "1 Added Passive Skill is Eternal Suffering",
+    "type": "explicit"
+   },
+   {
+    "id": "fractured.stat_2144634814",
+    "text": "1 Added Passive Skill is Eternal Suffering",
+    "type": "fractured"
+   }
+  ]
+ },
+ {
+  "English": [
+   {
+    "condition": [
+     {}
+    ],
+    "format": [
+     "ignore"
+    ],
+    "index_handlers": [
+     []
+    ],
+    "string": "1 Added Passive Skill is Evil Eye"
+   }
+  ],
+  "ids": [
+   "local_affliction_notable_evil_eye"
+  ],
+  "trade_stats": [
+   {
+    "id": "explicit.stat_156080652",
+    "text": "1 Added Passive Skill is Evil Eye",
+    "type": "explicit"
+   },
+   {
+    "id": "explicit.stat_4291066912",
+    "text": "1 Added Passive Skill is Evil Eye",
+    "type": "explicit"
+   },
+   {
+    "id": "fractured.stat_156080652",
+    "text": "1 Added Passive Skill is Evil Eye",
+    "type": "fractured"
+   },
+   {
+    "id": "fractured.stat_4291066912",
+    "text": "1 Added Passive Skill is Evil Eye",
+    "type": "fractured"
+   }
+  ]
+ },
+ {
+  "English": [
+   {
+    "condition": [
+     {}
+    ],
+    "format": [
+     "ignore"
+    ],
+    "index_handlers": [
+     []
+    ],
+    "string": "1 Added Passive Skill is Thaumophage"
+   }
+  ],
+  "ids": [
+   "local_affliction_notable_thaumophage"
+  ],
+  "trade_stats": [
+   {
+    "id": "explicit.stat_177215332",
+    "text": "1 Added Passive Skill is Thaumophage",
+    "type": "explicit"
+   },
+   {
+    "id": "fractured.stat_177215332",
+    "text": "1 Added Passive Skill is Thaumophage",
+    "type": "fractured"
+   }
+  ]
+ },
+ {
+  "English": [
+   {
+    "condition": [
+     {}
+    ],
+    "format": [
+     "ignore"
+    ],
+    "index_handlers": [
+     []
+    ],
+    "string": "1 Added Passive Skill is Wicked Pall"
+   }
+  ],
+  "ids": [
+   "local_affliction_notable_wicked_pall"
+  ],
+  "trade_stats": [
+   {
+    "id": "explicit.stat_1616734644",
+    "text": "1 Added Passive Skill is Wicked Pall",
+    "type": "explicit"
+   },
+   {
+    "id": "fractured.stat_1616734644",
+    "text": "1 Added Passive Skill is Wicked Pall",
+    "type": "fractured"
+   }
+  ]
+ },
+ {
+  "English": [
+   {
+    "condition": [
+     {
+      "min": 0,
+      "max": 0
+     },
+     {
+      "min": 1,
+      "max": 1
+     }
+    ],
+    "format": [
+     "ignore",
+     "#"
+    ],
+    "index_handlers": [
+     [],
+     []
+    ],
+    "string": "Rare and Unique Monsters in Area are Possessed by up to {1} Tormented Spirit and if Possessed their Minions are Touched"
+   },
+   {
+    "condition": [
+     {
+      "min": 0,
+      "max": 0
+     },
+     {}
+    ],
+    "format": [
+     "ignore",
+     "#"
+    ],
+    "index_handlers": [
+     [],
+     []
+    ],
+    "string": "Rare and Unique Monsters in Area are Possessed by up to {1} Tormented Spirits and if Possessed their Minions are Touched"
+   },
+   {
+    "condition": [
+     {
+      "min": 1,
+      "max": 1
+     },
+     {
+      "min": 1,
+      "max": 1
+     }
+    ],
+    "format": [
+     "#",
+     "ignore"
+    ],
+    "index_handlers": [
+     [],
+     []
+    ],
+    "string": "Rare and Unique Monsters in Area are Possessed by {0} Tormented Spirit and their Minions are Touched"
+   },
+   {
+    "condition": [
+     {},
+     {}
+    ],
+    "format": [
+     "#",
+     "#"
+    ],
+    "index_handlers": [
+     [],
+     []
+    ],
+    "string": "Rare and Unique Monsters in Area are Possessed by {0} to {1} Tormented Spirits and their Minions are Touched"
+   }
+  ],
+  "ids": [
+   "memory_line_minimum_possessions_of_rare_unique_monsters",
+   "memory_line_maximum_possessions_of_rare_unique_monsters"
+  ],
+  "trade_stats": [
+   {
+    "id": "explicit.stat_362579144",
+    "text": "Rare and Unique Monsters in Area are Possessed by up to # Tormented Spirit and if Possessed their Minions are Touched",
+    "type": "explicit"
+   }
+  ]
+ },
+ {
+  "English": [
+   {
+    "condition": [
+     {
+      "min": 1
+     }
+    ],
+    "format": [
+     "+#"
+    ],
+    "index_handlers": [
+     []
+    ],
+    "string": "Prevent {0}% of Reflected Elemental Damage"
+   }
+  ],
+  "ids": [
+   "%_of_your_elemental_damage_cannot_be_reflected"
+  ]
+ }
+]
