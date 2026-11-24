@@ -1,0 +1,12 @@
+id: deprecated-flip
+name: Removed flip
+status: deprecated
+verified_patch: 3.30.0
+base:
+  lookup: { source: ninja, type: BaseType, name: Imperial Bow, ilvl_min: 85 }
+steps:
+  - action: bench_craft
+outcomes:
+  - { name: crafted bow, probability: 1.0, fixed_chaos: 100 }
+salvage: { fixed_chaos: 0 }
+minutes: 1

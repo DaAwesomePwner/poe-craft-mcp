@@ -1,0 +1,17 @@
+id: regalia-weights
+name: Alteration fire resistance (weights)
+tags: [alteration]
+status: verified
+verified_patch: 3.30.0
+base:
+  lookup: { source: ninja, type: BaseType, name: Astral Plate, ilvl_min: 85 }
+steps:
+  - action: alteration_spam
+    materials:
+      - { source: ninja, category: Currency, id: alt, qty: 1 }
+    repeat_until: fire resistance suffix
+    p_success: { p_source: weights, method: alt, target_mods: [FireResist1], base: Vaal Regalia, ilvl: 5 }
+outcomes:
+  - { name: resist armour, probability: 1.0, trade_url: "https://www.pathofexile.com/trade/search/Settlers/H4sIAAAAAAAAAzXMMQqAMAxG4avIP3uCHkPdpEPECIU0LTYOUnp328H1e_AqipE9Ba4iZQtJ4ZBUgjLaDKXIHTY6HqFpoUKYYW8euIaYhaclHdxxbPplr38mPTtfQYzvEXzz7QP2CqqubgAAAA" }
+salvage: { fixed_chaos: 0 }
+minutes: 2
