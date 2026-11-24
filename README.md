@@ -208,8 +208,9 @@ pairs sell for little. Two tools find the pairs worth crafting for:
   attempt. Compare the chance and the profit, not the pair count.
 - **Provisional vs confirmed.** The survey only runs two broad discovery searches per enchant
   and values each candidate pair from one of those listings (the `min_listings`-th cheapest at
-  or above the threshold, or the cheapest when fewer are listed, less the undercut). It is cheap and good for ranking, but it
-  confirms nothing. `cluster_combos` confirms pairs with exact searches that exclude every
+  or above the threshold, less the undercut). A pair with fewer than `min_listings` listings
+  there is a thin candidate: counted, but left out of the chance per attempt. The survey is
+  cheap and good for ranking, but it confirms nothing. `cluster_combos` confirms pairs with exact searches that exclude every
   other notable, and only its numbers should decide a craft.
 - **Rate limits.** The trade site allows roughly 30 searches per 5 minutes, so a cold survey of
   every Medium enchant (2 searches each) takes several minutes. The survey uses cached results

@@ -152,7 +152,6 @@ async def cluster_combo_survey(
             found.append((plan, got))
         else:
             live.append(plan)
-    n_cached = len(found)
     stopped, retry_after, pending = None, None, []
     for i, plan in enumerate(live):
         if clock() >= deadline:
@@ -180,7 +179,7 @@ async def cluster_combo_survey(
         pending=[{"enchant": p.enchant.name, "enchant_id": p.enchant.id} for p in pending],
         stopped=stopped,
         retry_after_seconds=retry_after,
-        discovery=truncation_report(found, n_cached),
+        discovery=truncation_report(found, ranking),
         next_step="confirm the top enchants with cluster_combos (exact pair searches, miss "
         "value, base and orb costs, profit per hour) before crafting",
     )

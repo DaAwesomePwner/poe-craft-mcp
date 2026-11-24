@@ -22,9 +22,12 @@ SURVEY_ASSUMPTIONS = (
     "pair search confirms it. Run cluster_combos on an enchant to confirm its pairs and price "
     "the craft",
     "Candidate: a pair with fewer than min_listings discovery listings below T and at least "
-    "one at or above T. Provisional value: the min_listings-th cheapest listing at or above T, "
-    "or the cheapest one when fewer are listed, less undercut (undercut_pct); provisionally "
-    "sellable when that value is at least T",
+    "one at or above T. Provisionally sellable: at least min_listings listings at or above T "
+    "and a provisional value (the min_listings-th cheapest listing at or above T, less "
+    "undercut_pct) of at least T. A candidate with fewer listings there is a thin candidate: "
+    "counted, never provisionally sellable and left out of p_any_provisional",
+    "When band B (at or above T) is truncated, its per-pair counts are lower bounds: a thin "
+    "candidate may have more listings than were fetched",
     "p_any_provisional: exact chance per attempt (Alteration/Augmentation until an anchor "
     "notable shows, then one Regal) that the rare holds a provisionally sellable pair; the "
     "hit value per attempt has no miss value and no costs",
@@ -70,8 +73,11 @@ def rate_warnings(currency: Dataset, league: str) -> list[str]:
     return warnings
 
 
-def truncation_report(discs: Iterable[tuple[Plan, Discovery]], from_cache: int) -> dict[str, Any]:
-    """Discovery totals over the surveyed enchants and which searches were truncated."""
+def truncation_report(
+    discs: Iterable[tuple[Plan, Discovery]], rows: Iterable[dict[str, Any]]
+) -> dict[str, Any]:
+    """Discovery totals over the surveyed enchants and which searches were truncated.
+    `from_cache` counts the rows whose own sources all came from the cache."""
     done = list(discs)
     truncated = []
     for plan, disc in done:
@@ -82,7 +88,7 @@ def truncation_report(discs: Iterable[tuple[Plan, Discovery]], from_cache: int) 
                 )
     report: dict[str, Any] = {
         "enchants_surveyed": len(done),
-        "from_cache": from_cache,
+        "from_cache": sum(bool(row["from_cache"]) for row in rows),
         "listings_fetched": sum(d.below.fetched + d.above.fetched for _, d in done),
         "listings_total": sum(d.below.total + d.above.total for _, d in done),
         "truncated": truncated,
